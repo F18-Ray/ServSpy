@@ -3,6 +3,7 @@
 #include <openssl/err.h>
 #include <openssl/pem.h>
 #include <stdio.h>
+#include "include/encrypt.h"
 
 EVP_PKEY *RSA_generate_keys(EVP_PKEY *rtrn_key)
 {
