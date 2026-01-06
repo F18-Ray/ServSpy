@@ -27,7 +27,7 @@ class TCPServer_Base:
             # del disconnected clients
             for addr in disconnected_clients:
                 if addr in self.clients:
-                    print(f"清理断开连接的客户端: {addr}")
+                    print(f"deleting the disconnected client: {addr}")
                     self.clients[addr]['socket'].close()
                     del self.clients[addr]
     
@@ -43,11 +43,11 @@ class TCPServer_Base:
                 'connected_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
-        print(f"新客户端连接: {client_id}")
-        print(f"当前连接数: {len(self.clients)}")
+        print(f"new connection: {client_id}")
+        print(f"connection count mount: {len(self.clients)}")
         
         # 发送欢迎消息
-        welcome_msg = f"欢迎连接到服务器！您的ID: {client_id}\n"
+        welcome_msg = f"Welcome!: {client_id}\n"
         client_socket.sendall(welcome_msg.encode('utf-8'))
         
         try:
@@ -70,54 +70,54 @@ class TCPServer_Base:
                     print(log_msg)
                     
                     # 广播消息给其他客户端
-                    broadcast_msg = f"[{timestamp}] 客户端 {client_id}: {message}"
+                    broadcast_msg = f"[{timestamp}] client {client_id}: {message}"
                     self.broadcast(broadcast_msg, exclude_client=client_address)
                     
-                    response = f"消息已发送: {message}"
+                    response = f"msg send: {message}"
                     
                 # 发送响应
                 if response:
                     client_socket.sendall(response.encode('utf-8'))
                     
         except ConnectionResetError:
-            print(f"客户端断开连接: {client_id}")
+            print(f"client disconnected: {client_id}")
         except Exception as e:
-            print(f"处理客户端 {client_id} 时出错: {e}")
+            print(f"error while deal with client {client_id} : {e}")
         finally:
             with self.client_lock:
                 if client_address in self.clients:
                     del self.clients[client_address]
             client_socket.close()
-            print(f"客户端断开: {client_id}")
-            print(f"当前连接数: {len(self.clients)}")
-            
+            print(f"client disconnected: {client_id}")
+            print(f"current connection count: {len(self.clients)}")
+
     def handle_command(self, client_socket, client_address, command):
         """处理特殊命令"""
         client_id = f"{client_address[0]}:{client_address[1]}"
         
         if command == '/help':
             help_text = """
-            可用命令:
-            /help - 显示帮助信息
-            /time - 显示服务器时间
-            /clients - 显示在线客户端
-            /quit - 断开连接
+            avalable commands:
+            /help - print help meg
+            /time - display server time
+            /clients - display connected clients
+            /quit - disconnect
             """
             return help_text
             
         elif command == '/time':
-            return f"服务器时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            return f"server time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             
         elif command == '/clients':
             with self.client_lock:
                 client_list = [info['id'] for info in self.clients.values()]
-                return f"在线客户端 ({len(client_list)}): {', '.join(client_list)}"
+                return f"online clients ({len(client_list)}): {', '.join(client_list)}"
                 
         elif command == '/quit':
-            return "再见！"
+            return "Bye!"
             
         else:
-            return f"未知命令: {command}"
+            return f"unknow: {command}"
             
     def start(self):
         """启动服务器"""
@@ -128,9 +128,9 @@ class TCPServer_Base:
             self.server_socket.listen(self.max_clients)
             
             self.running = True
-            print(f"高级TCP服务器启动在 {self.host}:{self.port}")
-            print(f"最大连接数: {self.max_clients}")
-            print("输入 'stop' 停止服务器\n")
+            print(f"TCP server deployed on {self.host}:{self.port}")
+            print(f"max clients mount: {self.max_clients}")
+            print("input '/stop' to stop the server\n")
             
             # 启动控制台输入线程
             input_thread = threading.Thread(target=self.console_input, daemon=True)
@@ -142,7 +142,7 @@ class TCPServer_Base:
                     client_socket, client_address = self.server_socket.accept()
                     
                     if len(self.clients) >= self.max_clients:
-                        client_socket.sendall("服务器已达到最大连接数，请稍后再试。".encode('utf-8'))
+                        client_socket.sendall("Max connection mount, try latter".encode('utf-8'))
                         client_socket.close()
                         continue
                     
@@ -159,7 +159,7 @@ class TCPServer_Base:
                     break
                     
         except Exception as e:
-            print(f"服务器错误: {e}")
+            print(f"Server error: {e}")
         finally:
             self.stop()
             
@@ -169,16 +169,16 @@ class TCPServer_Base:
             try:
                 cmd = input().strip().lower()
                 if cmd == 'stop':
-                    print("正在停止服务器...")
+                    print("shutting down...")
                     self.running = False
                     self.stop()
                 elif cmd == 'status':
-                    print(f"当前连接数: {len(self.clients)}")
-                    print(f"服务器运行中: {self.running}")
+                    print(f"current connection count: {len(self.clients)}")
+                    print(f"server running: {self.running}")
                 elif cmd == 'clients':
                     with self.client_lock:
                         for addr, info in self.clients.items():
-                            print(f"  {info['id']} - 连接时间: {info['connected_time']}")
+                            print(f"  {info['id']} - connection time: {info['connected_time']}")
             except:
                 break
                 
@@ -198,7 +198,7 @@ class TCPServer_Base:
         # 关闭服务器套接字
         if self.server_socket:
             self.server_socket.close()
-            print("服务器已停止")
+            print("server stopped")
 
 
 
@@ -216,7 +216,7 @@ class TCPClient_Base:
             self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.client_socket.settimeout(5)  # 连接超时5秒
             
-            print(f"正在连接到 {self.host}:{self.port}...")
+            print(f"connecting to {self.host}:{self.port}...")
             self.client_socket.connect((self.host, self.port))
             
             self.running = True
@@ -226,17 +226,17 @@ class TCPClient_Base:
             self.receive_thread.daemon = True
             self.receive_thread.start()
             
-            print("连接成功！输入 '/help' 查看可用命令")
+            print("connect success! type '/help' to get help.\n")
             return True
             
         except socket.timeout:
-            print("连接超时")
+            print("outof time, unable to connect to server")
             return False
         except ConnectionRefusedError:
-            print("连接被拒绝，请确保服务器正在运行")
+            print("connection rejected by server, please ensure the server is running")
             return False
         except Exception as e:
-            print(f"连接错误: {e}")
+            print(f"connection error: {e}")
             return False
             
     def receive_messages(self):
@@ -246,7 +246,7 @@ class TCPClient_Base:
             try:
                 data = self.client_socket.recv(4096)
                 if not data:
-                    print("\n连接已断开")
+                    print("\nbreak the connection from server")
                     self.running = False
                     break
                     
@@ -256,23 +256,23 @@ class TCPClient_Base:
                 while '\n' in buffer:
                     line, buffer = buffer.split('\n', 1)
                     if line.strip():
-                        print(f"\n[服务器] {line}")
+                        print(f"\n[server] {line}")
                         
             except socket.timeout:
                 continue
             except ConnectionResetError:
-                print("\n连接被重置")
+                print("\nReset by server, connection closed")
                 self.running = False
                 break
             except Exception as e:
-                print(f"\n接收消息错误: {e}")
+                print(f"\nget msg error: {e}")
                 self.running = False
                 break
                 
     def send_message(self, message):
         """发送消息到服务器"""
         if not self.running or not self.client_socket:
-            print("未连接到服务器")
+            print("disable the connect to server")
             return False
             
         try:
@@ -284,7 +284,7 @@ class TCPClient_Base:
             return True
             
         except Exception as e:
-            print(f"发送消息错误: {e}")
+            print(f"send msg error: {e}")
             return False
             
     def interactive_mode(self):
@@ -307,7 +307,7 @@ class TCPClient_Base:
                             self.send_message(message)
                             
                 except KeyboardInterrupt:
-                    print("\n正在断开连接...")
+                    print("\nshutting down...")
                     self.send_message('/quit')
                     time.sleep(0.5)
                     break
@@ -329,12 +329,12 @@ class TCPClient_Base:
                 
                 # 发送文件数据
                 self.client_socket.sendall(file_data)
-                print(f"文件 {filename} 已发送")
+                print(f"file {filename} sended successfully")
                 
         except FileNotFoundError:
-            print(f"文件 {filename} 不存在")
+            print(f"file {filename} not exist")
         except Exception as e:
-            print(f"文件传输错误: {e}")
+            print(f"send error: {e}")
             
     def close(self):
         """关闭连接"""
@@ -346,10 +346,10 @@ class TCPClient_Base:
 def main():
     import argparse
     
-    parser = argparse.ArgumentParser(description='高级TCP客户端')
-    parser.add_argument('--host', default='127.0.0.1', help='服务器地址')
-    parser.add_argument('--port', type=int, default=65432, help='服务器端口')
-    parser.add_argument('--file', help='发送文件')
+    parser = argparse.ArgumentParser(description='TCP client')
+    parser.add_argument('--host', default='127.0.0.1', help='server address')
+    parser.add_argument('--port', type=int, default=65432, help='server port')
+    parser.add_argument('--file', help='send file')
     
     args = parser.parse_args()
     
@@ -365,7 +365,7 @@ def main():
         else:
             client.interactive_mode()
     except KeyboardInterrupt:
-        print("\n客户端正在关闭...")
+        print("\nclient shutting down...")
     finally:
         client.close()
 
