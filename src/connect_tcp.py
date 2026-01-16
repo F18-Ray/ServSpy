@@ -53,8 +53,8 @@ class TCPServer_Base:  # TCP server class
                     timestamp = datetime.now().strftime("%H:%M:%S")  # deal with normal message
                     log_msg = f"[{timestamp}] {client_id}: {message}"
                     print(log_msg)
-                    broadcast_msg = f"[{timestamp}] client {client_id}: {message}"  # send broadcast message
-                    self.broadcast(broadcast_msg, exclude_client=client_address)
+                    # broadcast_msg = f"[{timestamp}] client {client_id}: {message}"  # send broadcast message
+                    # self.broadcast(broadcast_msg, exclude_client=client_address)
                     response = f"msg send: {message}"
                 if response:  # send response to client
                     client_socket.sendall(response.encode('utf-8'))
@@ -71,6 +71,7 @@ class TCPServer_Base:  # TCP server class
             print(f"current connection count: {len(self.clients)}")
     def handle_command(self, client_socket, client_address, command):  # deal with special commands from client
         client_id = f"{client_address[0]}:{client_address[1]}"
+        send_str=None
         if command == '/help':
             help_text = """
             avalable commands:
@@ -81,15 +82,23 @@ class TCPServer_Base:  # TCP server class
             """
             return help_text
         elif command == '/time':
-            return f"server time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            send_str=f"server time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+            client_socket.sendall(send_str.encode('utf-8'))
+            return send_str
         elif command == '/clients':
             with self.client_lock:
                 client_list = [info['id'] for info in self.clients.values()]
-                return f"online clients ({len(client_list)}): {', '.join(client_list)}"
+                send_str=f"online clients ({len(client_list)}): {', '.join(client_list)}"
+                client_socket.sendall(send_str.encode('utf-8'))
+                return send_str
         elif command == '/quit':
-            return "Bye!"
+            send_str="Bye!"
+            client_socket.sendall(send_str.encode('utf-8'))
+            return send_str
         else:
-            return f"unknow: {command}"
+            send_str=f"unknow: {command}"
+            client_socket.sendall(send_str.encode('utf-8'))
+            return send_str
     def start_TCP_Server(self):  # set up server socket
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
