@@ -1,3 +1,5 @@
+import os
+import ast
 import sys
 import time
 import socket
@@ -6,6 +8,8 @@ import threading
 from datetime import datetime
 class TCPServer_Base:  # TCP server class
     def __init__(self, host='127.0.0.1', port=65432, max_clients=10):
+        self.decode_command_table_file_path=os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 'decode_command_table.json')
         self.host = host
         self.port = port
         self.max_clients = max_clients
@@ -13,6 +17,10 @@ class TCPServer_Base:  # TCP server class
         self.clients = {}  # store client info
         self.running = False
         self.client_lock = threading.Lock()  # add the threading lock
+        self.command_decode_table=None
+        with open(self.decode_command_table_file_path, 'r', encoding='utf-8') as f:
+            self.command_decode_table = f.read()
+        ast.literal_eval(self.command_decode_table)
         self.start_TCP_Server()
     def broadcast(self, message, exclude_client=None): # broadcast message to all clients except exclude_client
         with self.client_lock:
@@ -146,6 +154,8 @@ class TCPServer_Base:  # TCP server class
                     with self.client_lock:
                         for addr, info in self.clients.items():
                             print(f"  {info['id']} - connection time: {info['connected_time']}")
+                elif deal_cmd == 'file':
+                    pass
             except:
                 break
     def stop(self):  # shutting down the server
@@ -162,12 +172,18 @@ class TCPServer_Base:  # TCP server class
             print("server stopped")
 class TCPClient_Base:  # TCP client class
     def __init__(self, host='127.0.0.1', port=65432, timeout=5):
+        self.decode_command_table_file_path=os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), 'decode_command_table.json')
         self.host = host
         self.port = port
         self.timeout = timeout
         self.client_socket = None
         self.running = False
         self.receive_thread = None
+        self.command_decode_table=None
+        with open(self.decode_command_table_file_path, 'r', encoding='utf-8') as f:
+            self.command_decode_table = f.read()
+        ast.literal_eval(self.command_decode_table)
         self.start_TCP_client()
     def connect(self):  # connect to server
         try:
