@@ -17,10 +17,11 @@ class TCPServer_Base:  # TCP server class
         self.clients = {}  # store client info
         self.running = False
         self.client_lock = threading.Lock()  # add the threading lock
-        self.command_decode_table=None
+        self.command_decode_table_str=None
         with open(self.decode_command_table_file_path, 'r', encoding='utf-8') as f:
-            self.command_decode_table = f.read()
-        ast.literal_eval(self.command_decode_table)
+            self.command_decode_table_str = f.read()
+        self.command_decode_table=(
+            ast.literal_eval(self.command_decode_table_str))
         self.start_TCP_Server()
     def broadcast(self, message, exclude_client=None): # broadcast message to all clients except exclude_client
         with self.client_lock:
@@ -56,7 +57,8 @@ class TCPServer_Base:  # TCP server class
                     break
                 message = data.decode('utf-8').strip()  # decode msg
                 if message.startswith('/'):  # deal with special command
-                    response = self.handle_command(client_socket, client_address, message)
+                    response = self.handle_command(
+                        client_socket, client_address, message)
                 else:
                     timestamp = datetime.now().strftime("%H:%M:%S")  # deal with normal message
                     log_msg = f"[{timestamp}] {client_id}: {message}"
@@ -85,6 +87,7 @@ class TCPServer_Base:  # TCP server class
             /time - display server time
             /clients - display connected clients
             /quit - disconnect
+            /file - send file to server
             """
             send_str=help_text+"\n"
             return send_str
@@ -104,6 +107,14 @@ class TCPServer_Base:  # TCP server class
         else:
             send_str=f"unknow: {command}"+"\n"
             return send_str
+        if command.split(" ")[0]=="/file":
+            while True:
+                if (command==self.command_decode_table[0][
+                    "file_send_server_header"]):
+                    break
+            client_socket.sendall(
+                self.command_decode_table[0][
+                    "file_resieve_client_header"].encode('utf-8'))
     def start_TCP_Server(self):  # set up server socket
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -180,10 +191,11 @@ class TCPClient_Base:  # TCP client class
         self.client_socket = None
         self.running = False
         self.receive_thread = None
-        self.command_decode_table=None
+        self.command_decode_table_str=None
         with open(self.decode_command_table_file_path, 'r', encoding='utf-8') as f:
-            self.command_decode_table = f.read()
-        ast.literal_eval(self.command_decode_table)
+            self.command_decode_table_str = f.read()
+        self.command_decode_table=(
+            ast.literal_eval(self.command_decode_table_str))
         self.start_TCP_client()
     def connect(self):  # connect to server
         try:
@@ -254,6 +266,9 @@ class TCPClient_Base:  # TCP client class
                             self.send_message('/quit')
                             time.sleep(0.5)
                             break
+                        elif message.lower().split(" ")[0]=="/file":
+                            filename = message.split(" ")[1]
+                            self.file_transfer_mode(filename)
                         else:
                             self.send_message(message)
                 except KeyboardInterrupt:
@@ -267,12 +282,19 @@ class TCPClient_Base:  # TCP client class
             self.close()
     def file_transfer_mode(self, filename):  # file send mode
         try:
+            self.send_file_header_sign=(
+                self.command_decode_table[0]["file_send_server_header"])
+            self.send_file_data_sign=(
+                self.command_decode_table[0]["file_send_server_data"])
             with open(filename, 'rb') as file:  # send file name and size header
                 file_data = file.read()
-                header = f"/file {filename} {len(file_data)}\n"
+                header = f"file {filename} {len(file_data)}\n"
                 self.client_socket.sendall(header.encode('utf-8'))
-                time.sleep(0.1)
+                self.client_socket.sendall(
+                    self.send_file_header_sign.encode('utf-8'))
                 self.client_socket.sendall(file_data)  # send file data
+                self.client_socket.sendall(
+                    self.send_file_data_sign.encode('utf-8'))
                 print(f"file {filename} sended successfully")
         except FileNotFoundError:
             print(f"file {filename} not exist")
