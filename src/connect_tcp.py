@@ -86,8 +86,8 @@ class TCPServer_Base:  # TCP server class
             /help - print help meg
             /time - display server time
             /clients - display connected clients
-            /quit - disconnect
             /file - send file to server
+            /quit - disconnect
             """
             send_str=help_text+"\n"
             return send_str
@@ -191,6 +191,7 @@ class TCPClient_Base:  # TCP client class
         self.client_socket = None
         self.running = False
         self.receive_thread = None
+        self.receive_data_from_server = ""
         self.command_decode_table_str=None
         with open(self.decode_command_table_file_path, 'r', encoding='utf-8') as f:
             self.command_decode_table_str = f.read()
@@ -223,6 +224,8 @@ class TCPClient_Base:  # TCP client class
         while self.running:
             try:
                 data = self.client_socket.recv(4096)
+                self.receive_data_from_server=(
+                    data.decode('utf-8').strip())
                 if not data:
                     print("\nbreak the connection from server")
                     self.running = False
@@ -292,6 +295,7 @@ class TCPClient_Base:  # TCP client class
                 self.client_socket.sendall(header.encode('utf-8'))
                 self.client_socket.sendall(
                     self.send_file_header_sign.encode('utf-8'))
+                # ...
                 self.client_socket.sendall(file_data)  # send file data
                 self.client_socket.sendall(
                     self.send_file_data_sign.encode('utf-8'))
@@ -306,19 +310,10 @@ class TCPClient_Base:  # TCP client class
             self.client_socket.close()
         print("connection closed")
     def start_TCP_client(self):  # start client
-        parser = argparse.ArgumentParser(description='TCP client')
-        parser.add_argument('--host', default='127.0.0.1', help='server address')
-        parser.add_argument('--port', type=int, default=65432, help='server port')
-        parser.add_argument('--file', help='send file')
-        args = parser.parse_args()
         if not self.connect():
             sys.exit(1)
         try:
-            if args.file:
-                self.file_transfer_mode(args.file)
-                time.sleep(2)
-            else:
-                self.interactive_mode()
+            self.interactive_mode()
         except KeyboardInterrupt:
             print("\nclient shutting down...")
         finally:
