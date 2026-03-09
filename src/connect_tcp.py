@@ -308,6 +308,8 @@ class TCPServer_Base:  # TCP server class
         server_file_socket=None
         def close_socket():
             nonlocal file_running
+            nonlocal client_file_socket
+            nonlocal server_file_socket
             file_running=False
             client_file_socket.close()
             server_file_socket.close()
@@ -420,19 +422,18 @@ class TCPServer_Base:  # TCP server class
             "/server_file_transfer_port {}".format(file_transfer_server_port))
         client_socket.sendall(transfer_server_port_msg.encode('utf-8'))
         server_file_socket.listen(1)
-        while file_running:
-            try:
-                client_file_socket, client_file_address = server_file_socket.accept()
-                print(client_file_socket, client_file_address)
-                threading.Thread(
-                    target=file_transfer_client_recv,
-                    args=(client_id, ),
-                    daemon=True).start()
-            except Exception as e:
-                print(f"\nget file transfer msg error: {e}")
-                break
-            finally:
-                server_file_socket.close()
+        try:
+            client_file_socket, client_file_address = server_file_socket.accept()
+            print(client_file_socket, client_file_address)
+            threading.Thread(
+                target=file_transfer_client_recv,
+                args=(client_id, ),
+                daemon=True).start()
+        except Exception as e:
+            print(f"\nget file transfer msg error: {e}")
+            close_socket()
+        finally:
+            server_file_socket.close()
     def start_TCP_Server(self):  # set up server socket
         try:
             self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
