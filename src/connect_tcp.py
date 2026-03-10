@@ -273,7 +273,15 @@ class TCPServer_Base:  # TCP server class
                 args=(client_id, client_socket),
                 daemon=True)
             file_transfer_client_recv_server_start_thread.start()
-    def file_transfer_client_recv_server_start(self, client_id, client_socket):
+        elif command.lower().split(" ")[0] == "/file_folder":
+            relative_folder_path=command.split(" ")[1]
+            folder_transfer_client_recv_server_start_thread=threading.Thread(
+                target=self.file_transfer_client_recv_server_start,
+                args=(client_id, client_socket, relative_folder_path),
+                daemon=True)
+            folder_transfer_client_recv_server_start_thread.start()
+    def file_transfer_client_recv_server_start(
+            self, client_id, client_socket, new_save_path=None):
         self.send_file_header_sign = (
             self.command_decode_table[0]["file_send_server_header"])
         self.send_file_data_sign = (
@@ -296,13 +304,14 @@ class TCPServer_Base:  # TCP server class
         else:
             file_transfer_server_port=0
         self.file_transfer_mode_recv(
-            self.host, file_transfer_server_port, client_socket, client_id)
+            self.host, file_transfer_server_port, 
+            client_socket, client_id, new_save_path)
         if self.is_hand_alloc_port==True:
             self.file_pfree(file_transfer_server_port)
             print(
                 "releasing file transfer port, current latest port:", file_transfer_server_port)
     def file_transfer_mode_recv(self, server_file_address, server_file_port,
-                                client_socket, client_id):
+                                client_socket, client_id, new_save_path):
         file_running=True
         client_file_socket=None
         server_file_socket=None
@@ -381,7 +390,14 @@ class TCPServer_Base:  # TCP server class
                 file_size = int.from_bytes(size_bytes, 'big')
                 client_file_socket.sendall(
                     self.server_reseived_file_header_sign.encode('utf-8'))
-                save_path = os.path.join(self.file_transfer_dir, filename)
+                if new_save_path:
+                    for node in new_save_path.split("/"):
+                        save_path = os.path.join(save_path, node)
+                        if os.path.exists(save_path)==False:
+                            os.mkdir(save_path)
+                        return None
+                else:
+                    save_path = os.path.join(self.file_transfer_dir, filename)
                 os.makedirs(self.file_transfer_dir, exist_ok=True)
                 with open(save_path, 'wb') as f:
                     remaining = file_size
@@ -772,6 +788,8 @@ class TCPClient_Base:  # TCP client class
                             self.file_transfer_client_recv_client_start_thread(message)
                         elif message.lower().split(" ")[0]=="/multiple_file":
                             self.multiple_file_transfer_client_recv_client_start(message)
+                        elif message.lower().split(" ")[0]=="/folder_file":
+                            self.folder_file_transfer_client_recv_client_start(message)
                         else:
                             self.send_message(message)
                 except KeyboardInterrupt:
@@ -783,6 +801,55 @@ class TCPClient_Base:  # TCP client class
                     break
         finally:
             self.close()
+    def folder_file_transfer_client_recv_client_start(self, message):
+        folder_path=message.split(" ")[1]
+        if os.path.isdir(folder_path)==False:
+            print(f"{folder_path} is not a valid folder path")
+            return False
+        base_path=os.path.abspath(folder_path)
+        folder_node_stack=[folder_path]
+        def get_relative_path(base_path, abs_path):
+            base = os.path.normpath(base_path)
+            abs_ = os.path.normpath(abs_path)
+            common = os.path.commonpath([base, abs_])
+            if common != base:
+                raise ValueError(f"'{abs_path}' is not a subpath of '{base_path}'")
+            rel = os.path.relpath(abs_, base)
+            if rel == '.':
+                return ''
+            rel = rel.replace(os.sep, '/')
+            return '/' + rel
+        def send_folder_transfer_command(folder_path):
+            folder_transfer_command_message=(
+                "/file_folder {}".format(folder_path))
+            self.send_message(folder_transfer_command_message)
+            print(f"start to send folder command: {folder_transfer_command_message}")
+        def get_all_files_in_folder():
+            nonlocal folder_node_stack
+            nonlocal base_path
+            while folder_node_stack:
+                for dirpath, dirnames, filename in os.walk(
+                    folder_node_stack[len(folder_node_stack)-1],
+                    topdown=True):
+                    for dirname in dirnames:
+                        absdirpath=os.path.join(dirpath, dirname)
+                        if os.path.isdir(absdirpath):
+                            folder_node_stack.append(absdirpath)
+                            transfer_path=get_relative_path(base_path, absdirpath)
+                            send_folder_transfer_command(transfer_path)
+                            get_all_files_in_folder()
+                        elif os.path.isfile(absdirpath):
+                            each_file_transfer_command_message=(
+                                "/file {}".format(absdirpath))
+                            self.file_transfer_client_recv_client_start_thread(
+                                each_file_transfer_command_message)
+                            print(f"start to send file command: {each_file_transfer_command_message}")
+                        else:
+                            print(f"{absdirpath} is not a valid file or folder path")
+                    del folder_node_stack[len(folder_node_stack)-1]
+        transfer_path=get_relative_path(base_path, folder_path)
+        send_folder_transfer_command(transfer_path)
+        get_all_files_in_folder()
     def multiple_file_transfer_client_recv_client_start(self, message):
         file_list=message.split(" ")[1:]
         for file in file_list:
