@@ -320,7 +320,7 @@ class TCPServer_Base:  # TCP server class
         else:
             file_transfer_server_port=0
         self.file_transfer_mode_recv(
-            self.host, file_transfer_server_port, 
+            self.host, file_transfer_server_port,
             client_socket, client_id, new_save_path, file_name)
         if self.is_hand_alloc_port==True:
             self.file_pfree(file_transfer_server_port)
@@ -351,7 +351,7 @@ class TCPServer_Base:  # TCP server class
             if file_name or new_save_path==None:
                 return save_path
             close_socket()
-            return None                    
+            return None
         def file_transfer_client_recv(client_id):
             nonlocal file_running
             nonlocal client_file_socket
