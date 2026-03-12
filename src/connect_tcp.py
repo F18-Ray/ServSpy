@@ -2,6 +2,7 @@ import os
 import ast
 import sys
 import time
+import copy
 import socket
 import threading
 from datetime import datetime
@@ -180,8 +181,7 @@ class TCPServer_Base:  # TCP server class
                 if exclude_client and addr == exclude_client:
                     continue
                 try:
-                    with client_info['send_lock']:
-                        client_info['socket'].sendall((message+'\n').encode('utf-8'))
+                    client_info['socket'].sendall((message+'\n').encode('utf-8'))
                 except:
                     disconnected_clients.append(addr)
             for addr in disconnected_clients:  # del disconnected clients
@@ -196,8 +196,7 @@ class TCPServer_Base:  # TCP server class
                 'socket': client_socket,
                 'address': client_address,
                 'id': client_id,
-                'connected_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                'send_lock': threading.Lock()}
+                'connected_time': datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
         print(f"new connection: {client_id}")
         print(f"connection count mount: {len(self.clients)}")
         welcome_msg = f"Welcome!: {client_id}\n"  # send welcome message
@@ -233,8 +232,7 @@ class TCPServer_Base:  # TCP server class
                         print(log_msg)
                         response = f"msg send: {message}"
                     if response:  # send response to client
-                        with self.clients[client_address]['send_lock']:
-                            client_socket.sendall(response.encode('utf-8'))
+                        client_socket.sendall(response.encode('utf-8'))
         except ConnectionResetError:
             print(f"client disconnected: {client_id}")
         except Exception as e:
@@ -276,35 +274,35 @@ class TCPServer_Base:  # TCP server class
             return send_str
         elif command.lower().split(" ")[0] == "/file":
             self.file_transfer_client_recv_client_start_thread(
-                client_id, client_socket, self.clients[client_address]['send_lock'])
+                client_id, client_socket, command)
         elif command.lower().split(" ")[0] == "/file_folder":
             self.file_folder_transfer_client_recv_client_start_thread(
-                command, client_id, client_socket, self.clients[client_address]['send_lock'])
+                command, client_id, client_socket)
     def file_folder_transfer_client_recv_client_start_thread(
-            self, command, client_id, client_socket, send_lock):
+            self, command, client_id, client_socket):
         relative_folder_path=command.split(" ")[1]
         try:
             file_name=command.split(" ")[2]
             folder_transfer_client_recv_server_start_thread=threading.Thread(
                 target=self.file_transfer_client_recv_server_start,
-                args=(client_id, client_socket, send_lock, relative_folder_path, file_name),
+                args=(client_id, client_socket, command, relative_folder_path, file_name),
                 daemon=True)
             folder_transfer_client_recv_server_start_thread.start()
         except:
             folder_transfer_client_recv_server_start_thread=threading.Thread(
                 target=self.file_transfer_client_recv_server_start,
-                args=(client_id, client_socket, send_lock, relative_folder_path),
+                args=(client_id, client_socket, command, relative_folder_path),
                 daemon=True)
             folder_transfer_client_recv_server_start_thread.start()
     def file_transfer_client_recv_client_start_thread(
-            self, client_id, client_socket, send_lock):
+            self, client_id, client_socket, command):
         file_transfer_client_recv_server_start_thread=threading.Thread(
                 target=self.file_transfer_client_recv_server_start,
-                args=(client_id, client_socket, send_lock),
+                args=(client_id, client_socket, command),
                 daemon=True)
         file_transfer_client_recv_server_start_thread.start()
     def file_transfer_client_recv_server_start(
-            self, client_id, client_socket, send_lock, new_save_path=None, file_name=None):
+            self, client_id, client_socket, command, new_save_path=None, file_name=None):
         self.send_file_header_sign = (
             self.command_decode_table[0]["file_send_server_header"])
         self.send_file_data_sign = (
@@ -328,13 +326,13 @@ class TCPServer_Base:  # TCP server class
             file_transfer_server_port=0
         self.file_transfer_mode_recv(
             self.host, file_transfer_server_port,
-            client_socket, client_id, new_save_path, file_name, send_lock)
+            client_socket, client_id, new_save_path, file_name, command)
         if self.is_hand_alloc_port==True:
             self.file_pfree(file_transfer_server_port)
             print(
                 "releasing file transfer port, current latest port:", file_transfer_server_port)
     def file_transfer_mode_recv(self, server_file_address, server_file_port,
-                                client_socket, client_id, new_save_path, file_name, send_lock):
+                                client_socket, client_id, new_save_path, file_name, command):
         file_running=True
         client_file_socket=None
         server_file_socket=None
@@ -472,10 +470,12 @@ class TCPServer_Base:  # TCP server class
         server_file_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_file_socket.bind((server_file_address, server_file_port))
         file_transfer_server_port=server_file_socket.getsockname()[1]
+        command_part=command.split(" ")
+        file_client_id=command_part[len(command_part)-1]
         transfer_server_port_msg=(
-            "/server_file_transfer_port {}\n".format(file_transfer_server_port))
-        with send_lock:
-            client_socket.sendall(transfer_server_port_msg.encode('utf-8'))
+            "/server_file_transfer_port {} {}\n".format(
+                file_transfer_server_port, file_client_id))
+        client_socket.sendall(transfer_server_port_msg.encode('utf-8'))
         server_file_socket.listen(1)
         try:
             client_file_socket, client_file_address = server_file_socket.accept()
@@ -591,7 +591,8 @@ class TCPClient_Base:  # TCP client class
         self.running = False
         self.receive_thread = None
         self.command_decode_table_str=None
-        self.send_lock = threading.Lock()
+        self.file_client_id=0
+        self.file_client_id_lock=threading.Lock()
         with open(self.decode_command_table_file_path, 'r', encoding='utf-8') as f:
             self.command_decode_table_str = f.read()
         self.command_decode_table=(
@@ -795,8 +796,7 @@ class TCPClient_Base:  # TCP client class
         try:  # add newline character for server to distinguish messages
             if not message.endswith('\n'):
                 message += '\n'
-            with self.send_lock:
-                self.client_socket.sendall(message.encode('utf-8'))
+            self.client_socket.sendall(message.encode('utf-8'))
             return True
         except Exception as e:
             print(f"send msg error: {e}")
@@ -815,7 +815,12 @@ class TCPClient_Base:  # TCP client class
         elif command.lower().split(" ")[0] == "/server_file_transfer_port":
             with self.file_transfer_server_port_lock:
                 self.file_transfer_server_port=int(command.split(" ")[1])
-                self.file_server_port_list.append(self.file_transfer_server_port)
+                try:
+                    file_client_id=int(command.split(" ")[2])
+                    self.file_server_port_list.append(
+                        [self.file_transfer_server_port, file_client_id])
+                except:
+                    pass
     def interactive_mode(self):  # Interactive mode
         try:
             while self.running:
@@ -933,7 +938,11 @@ class TCPClient_Base:  # TCP client class
             self.command_decode_table[0]["file_send_server_start_file_transfer"])
         self.error_sign=(
             self.command_decode_table[0]["file_send_resieve_error"])
-        send_msg=message
+        client_id=None
+        with self.file_client_id_lock:
+            client_id=copy.copy(self.file_client_id)
+            send_msg=message.strip()+" "+str(self.file_client_id)
+            self.file_client_id+=1
         try:
             waiting_time=0
             if message.lower().split(" ")[0]=="/file_folder":
@@ -953,20 +962,24 @@ class TCPClient_Base:  # TCP client class
                             break
             else:
                 file_transfer_client_port=0
-            while True:
-                time.sleep(0.1)
+            file_server_port=None
+            is_find_port=True
+            while is_find_port:
+                time.sleep(1)
                 if len(self.file_server_port_list)>0:
-                    break
-                waiting_time+=0.1
-                if waiting_time>=10:
+                    with self.file_transfer_server_port_lock:
+                        for port_info in self.file_server_port_list:
+                            if port_info[1]==client_id:
+                                file_server_port=port_info[0]
+                                self.file_server_port_list.remove(port_info)
+                                is_find_port=False
+                                break
+                    pass
+                waiting_time+=1
+                if waiting_time>=20:
                     print(
                         "ErrorWhileRecieveFileServerPort: transfer port waitting timeout, file sending failed")
                     return False
-            file_server_port=None
-            with self.file_transfer_server_port_lock:
-                file_server_port=(
-                    self.file_server_port_list[len(self.file_server_port_list)-1])
-                self.file_server_port_list.remove(file_server_port)
             self.file_transfer_mode(filename, self.host,
                                     file_server_port,
                                     file_transfer_client_port)
@@ -1002,6 +1015,8 @@ class TCPClient_Base:  # TCP client class
             nonlocal client_file_socket
             file_running = False
             client_file_socket.close()
+            with self.file_client_id_lock:
+                self.file_client_id-=1
         def receive_file_transfer_messages():
             nonlocal file_running
             nonlocal client_file_socket
