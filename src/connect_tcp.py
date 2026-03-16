@@ -595,6 +595,8 @@ class TCPClient_Base:  # TCP client class
         self.max_thread_num=max_thread_num
         self.file_client_id=0
         self.file_client_id_lock=threading.Lock()
+        MAX_CONCURRENT_FILES = self.max_thread_num
+        self.file_semaphore = threading.Semaphore(MAX_CONCURRENT_FILES)
         with open(self.decode_command_table_file_path, 'r', encoding='utf-8') as f:
             self.command_decode_table_str = f.read()
         self.command_decode_table=(
@@ -882,19 +884,17 @@ class TCPClient_Base:  # TCP client class
             else:
                 self.send_message(folder_transfer_command_message.strip())
                 print(f"start to send folder command: {folder_transfer_command_message}")
-        MAX_CONCURRENT_FILES = self.max_thread_num
-        file_semaphore = threading.Semaphore(MAX_CONCURRENT_FILES)
         def start_file_transfer_with_limit(rel_dir, file, root):
             cmd = f"/file_folder {shlex.quote(rel_dir)} {shlex.quote(file)}"
             def limited_transfer():
-                file_semaphore.acquire()
+                self.file_semaphore.acquire()
                 try:
                     self.file_transfer_client_recv_client_start(cmd, root)
                 finally:
-                    file_semaphore.release()
+                    self.file_semaphore.release()
             thread = threading.Thread(target=limited_transfer, daemon=True)
             thread.start()
-            print(f"start to send file: {cmd} (limit {MAX_CONCURRENT_FILES})")
+            print(f"start to send file: {cmd} (limit {self.max_thread_num})")
         def get_all_files_in_folder():
             for root, dirs, files in os.walk(folder_path):
                 rel_dir = get_relative_path(base_path, root)
@@ -909,11 +909,15 @@ class TCPClient_Base:  # TCP client class
     def multiple_file_transfer_client_recv_client_start(self, message):
         file_list=shlex.split(message)[1:]
         for file in file_list:
-            each_file_transfer_command_message=(
-                "/file {}".format(shlex.quote(file)))
-            self.file_transfer_client_recv_client_start_thread(
-                each_file_transfer_command_message)
-            print(f"start to send file command: {each_file_transfer_command_message}")
+            self.file_semaphore.acquire()
+            try:
+                each_file_transfer_command_message=(
+                    "/file {}".format(shlex.quote(file)))
+                self.file_transfer_client_recv_client_start_thread(
+                    each_file_transfer_command_message)
+                print(f"start to send file command: {each_file_transfer_command_message}")
+            finally:
+                self.file_semaphore.release()
     def file_transfer_client_recv_client_start_thread(self, message, file_folder_abspath=None):
         file_transfer_client_recv_client_start_thread=(
             threading.Thread(
