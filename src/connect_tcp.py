@@ -545,6 +545,56 @@ class TCPServer_Base:  # TCP server class
             close_socket()
         finally:
             server_file_socket.close()
+    def diff_multiple_file_diff_multiple_client_transfer_server_recv_client_start(self, message):
+        command_part=shlex.split(message)
+        del command_part[0]
+        file_client_pair_list=[]
+        file_list=[]
+        client_list=[]
+        command_part_index=0
+        while command_part:
+            part=command_part[0]
+            del command_part[0]
+            if part.startswith("(") and part.endswith(")"):
+                try:
+                    client_addr=ast.literal_eval(part)
+                    client_list.append(client_addr)
+                    command_part_index+=1
+                except:
+                    traceback.print_exc()
+            else:
+                if command_part_index!=0:
+                    file_client_pair=[client_list, file_list]
+                    file_client_pair_list.append(file_client_pair)
+                    file_list=[]
+                    client_list=[]
+                    file_list.append(part)
+                    command_part_index=0
+                else:
+                    file_list.append(part)
+        # undone
+    def multiple_file_multiple_client_transfer_server_recv_client_start(self, message):
+        command_part=shlex.split(message)
+        del command_part[0]
+        transfer_file_list=[]
+        client_addr_list=[]
+        for part in command_part:
+            if part.startswith("(") and part.endswith(")"):
+                try:
+                    client_addr=ast.literal_eval(part)
+                    client_addr_list.append(client_addr)
+                except:
+                    traceback.print_exc()
+            else:
+                transfer_file_list.append(part)
+        for client_addr in client_addr_list:
+            for transfer_file in transfer_file_list:
+                file_transfer_command_message=(
+                    "/file {} {}".format(shlex.quote(transfer_file), 
+                                         shlex.quote(str(client_addr))))
+                self.file_transfer_server_recv_client_start_thread(
+                    file_transfer_command_message)
+                print(f"start to send file command: {file_transfer_command_message}")
     def folder_file_transfer_server_recv_client_start(self, message):
         command_part=shlex.split(message)
         folder_path=command_part[1]
@@ -890,6 +940,8 @@ class TCPServer_Base:  # TCP server class
                     self.file_transfer_server_recv_client_start_thread(deal_cmd)
                 elif shlex.split(deal_cmd)[0] == '/file_folder':
                     self.folder_file_transfer_server_recv_client_start(deal_cmd)
+                elif shlex.split(deal_cmd)[0] == '/multiple_file_multiple_client':
+                    self.multiple_file_multiple_client_transfer_server_recv_client_start(deal_cmd)
             except:
                 traceback.print_exc()
                 break
