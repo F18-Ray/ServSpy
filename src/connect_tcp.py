@@ -204,10 +204,17 @@ class TCPServer_Base:  # TCP server class
             print("disable the connect to server")
             return False
         try:  # add newline character for server to distinguish messages
-            deal_msg=message.strip()
-            if not message.endswith('\n'):
-                deal_msg += '\n'
-            client_socket.sendall(deal_msg.encode("utf-8"))
+            if isinstance(message, str):
+                deal_msg = message.strip()
+                if not deal_msg.endswith('\n'):
+                    deal_msg += '\n'
+                data = deal_msg.encode('utf-8')
+            elif isinstance(message, bytes):
+                data = message
+            else:
+                print(f"Unsupported message type: {type(message)}")
+                return False
+            client_socket.sendall(data)
             return True
         except Exception as e:
             print(f"send msg error: {e}")
@@ -417,7 +424,8 @@ class TCPServer_Base:  # TCP server class
                         raise ConnectionError(
                             "ErrorWhileReceivingFileNameLength: client disconnected")
                     name_len_bytes += chunk
-                    if name_len_bytes == self.error_sign.decode('utf-8'):
+                    if (name_len_bytes.strip()==
+                        self.error_sign.encode('utf-8')):
                         close_socket()
                         raise ConnectionError(
                             "ErrorSignReceivedWhileReceivingFileNameLength: client reported error and disconnected")
@@ -437,7 +445,8 @@ class TCPServer_Base:  # TCP server class
                         raise ConnectionError(
                             "ErrorWhileReceivingFileName: client disconnected")
                     file_name_encoded += chunk
-                    if file_name_encoded == self.error_sign.decode('utf-8'):
+                    if (file_name_encoded.strip()==
+                        self.error_sign.encode('utf-8')):
                         close_socket()
                         raise ConnectionError(
                             "ErrorSignReceivedWhileReceivingFileName: client reported error and disconnected")
@@ -459,7 +468,8 @@ class TCPServer_Base:  # TCP server class
                         raise ConnectionError(
                             "ErrorWhileReceivingFileSize: client disconnected")
                     size_bytes += chunk
-                    if size_bytes == self.error_sign.decode('utf-8'):
+                    if (size_bytes.strip()==
+                        self.error_sign.encode('utf-8')):
                         close_socket()
                         raise ConnectionError(
                             "ErrorSignReceivedWhileReceivingFileSize: client reported error and disconnected")
@@ -721,12 +731,12 @@ class TCPServer_Base:  # TCP server class
                             pass
                         close_socket()
                         break
-                    if data==self.error_sign.decode('utf-8'):
+                    file_receive_data_from_server=(
+                        data.decode('utf-8').strip())
+                    if file_receive_data_from_server==self.error_sign:
                         print("\nError sign received from server, file transfer may have failed")
                         close_socket()
                         break
-                    file_receive_data_from_server=(
-                        data.decode('utf-8').strip())
                 except Exception as e:
                     print(f"\nget file transfer msg error: {e}")
                     traceback.print_exc()
@@ -1124,7 +1134,6 @@ class TCPClient_Base:  # TCP client class
                     if message:
                         print(f"\n[server] {line}")
             except socket.timeout:
-                traceback.print_exc()
                 continue
             except ConnectionResetError:
                 print("\nReset by server, connection closed")
@@ -1143,10 +1152,17 @@ class TCPClient_Base:  # TCP client class
             print("disable the connect to server")
             return False
         try:  # add newline character for server to distinguish messages
-            deal_msg=message.strip()
-            if not message.endswith('\n'):
-                deal_msg += '\n'
-            client_socket.sendall(deal_msg.encode('utf-8'))
+            if isinstance(message, str):
+                deal_msg = message.strip()
+                if not deal_msg.endswith('\n'):
+                    deal_msg += '\n'
+                data = deal_msg.encode('utf-8')
+            elif isinstance(message, bytes):
+                data = message
+            else:
+                print(f"Unsupported message type: {type(message)}")
+                return False
+            client_socket.sendall(data)
             return True
         except Exception as e:
             print(f"send msg error: {e}")
@@ -1404,12 +1420,12 @@ class TCPClient_Base:  # TCP client class
                             pass
                         close_socket()
                         break
-                    if data==self.error_sign.decode('utf-8'):
+                    file_receive_data_from_server=(
+                        data.decode('utf-8').strip())
+                    if file_receive_data_from_server==self.error_sign:
                         print("\nError sign received from server, file transfer may have failed")
                         close_socket()
                         break
-                    file_receive_data_from_server=(
-                        data.decode('utf-8').strip())
                 except Exception as e:
                     print(f"\nget file transfer msg error: {e}")
                     traceback.print_exc()
@@ -1607,7 +1623,8 @@ class TCPClient_Base:  # TCP client class
                         raise ConnectionError(
                             "ErrorWhileReceivingFileNameLength: client disconnected")
                     name_len_bytes += chunk
-                    if name_len_bytes == self.error_sign.decode('utf-8'):
+                    if (name_len_bytes.strip()==
+                        self.error_sign.encode('utf-8')):
                         close_socket()
                         raise ConnectionError(
                             "ErrorSignReceivedWhileReceivingFileNameLength: client reported error and disconnected")
@@ -1626,7 +1643,8 @@ class TCPClient_Base:  # TCP client class
                         raise ConnectionError(
                             "ErrorWhileReceivingFileName: client disconnected")
                     file_name_encoded += chunk
-                    if file_name_encoded == self.error_sign.decode('utf-8'):
+                    if (file_name_encoded.strip()==
+                        self.error_sign.encode('utf-8')):
                         close_socket()
                         raise ConnectionError(
                             "ErrorSignReceivedWhileReceivingFileName: client reported error and disconnected")
@@ -1647,7 +1665,8 @@ class TCPClient_Base:  # TCP client class
                         raise ConnectionError(
                             "ErrorWhileReceivingFileSize: client disconnected")
                     size_bytes += chunk
-                    if size_bytes == self.error_sign.decode('utf-8'):
+                    if (size_bytes.strip()==
+                        self.error_sign.encode('utf-8')):
                         close_socket()
                         raise ConnectionError(
                             "ErrorSignReceivedWhileReceivingFileSize: client reported error and disconnected")
