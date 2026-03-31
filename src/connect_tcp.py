@@ -551,30 +551,68 @@ class TCPServer_Base:  # TCP server class
         file_client_pair_list=[]
         file_list=[]
         client_list=[]
-        command_part_index=0
-        while command_part:
-            part=command_part[0]
-            del command_part[0]
+        command_part_addr_times=0
+        for command_part_index in range(len(command_part)):
+            part=command_part[command_part_index]
             if part.startswith("(") and part.endswith(")"):
                 try:
                     client_addr=ast.literal_eval(part)
                     client_list.append(client_addr)
-                    command_part_index+=1
+                    command_part_addr_times+=1
+                    if command_part_index==len(command_part)-1:
+                        file_client_pair=[client_list, file_list]
+                        file_client_pair_list.append(file_client_pair)
                 except:
                     traceback.print_exc()
             else:
-                if command_part_index!=0:
+                if command_part_addr_times!=0:
                     file_client_pair=[client_list, file_list]
                     file_client_pair_list.append(file_client_pair)
                     file_list=[]
                     client_list=[]
                     file_list.append(part)
-                    command_part_index=0
+                    command_part_addr_times=0
                 else:
                     file_list.append(part)
-        # undone
+        for each_file_client_pair in file_client_pair_list:
+            file_transfer_command_message=""
+            file_folder_transfer_command_message=""
+            for file in each_file_client_pair[1]:
+                try:
+                    if os.path.isfile(file):
+                        if file_transfer_command_message=="":
+                            file_transfer_command_message="/file {}".format(
+                                shlex.quote(file))
+                        else:
+                            file_transfer_command_message+=" {}".format(
+                                shlex.quote(file))
+                    elif os.path.isdir(file):
+                        if file_folder_transfer_command_message=="":
+                            file_folder_transfer_command_message="/file_folder {}".format(
+                                shlex.quote(file))
+                        else:
+                            file_folder_transfer_command_message+=" {}".format(
+                                shlex.quote(file))
+                except:
+                    traceback.print_exc()
+                    print(f"ErrorWhileParsingFilePath: {file} is not a valid file or folder path, skipped")
+                    pass
+            for client_addr in each_file_client_pair[0]:
+                if file_transfer_command_message!="":
+                    file_transfer_command_message+=" {}".format(
+                        shlex.quote(str(client_addr)))
+                if file_folder_transfer_command_message!="":
+                    file_folder_transfer_command_message+=" {}".format(
+                        shlex.quote(str(client_addr)))
+            if file_transfer_command_message!="":
+                self.multiple_file_multiple_client_transfer_server_recv_client_start(
+                    file_transfer_command_message)
+            if file_folder_transfer_command_message!="":
+                self.multiple_file_multiple_client_transfer_server_recv_client_start(
+                    file_folder_transfer_command_message)
     def multiple_file_multiple_client_transfer_server_recv_client_start(self, message):
         command_part=shlex.split(message)
+        command_type=command_part[0]
         del command_part[0]
         transfer_file_list=[]
         client_addr_list=[]
@@ -589,12 +627,20 @@ class TCPServer_Base:  # TCP server class
                 transfer_file_list.append(part)
         for client_addr in client_addr_list:
             for transfer_file in transfer_file_list:
-                file_transfer_command_message=(
-                    "/file {} {}".format(shlex.quote(transfer_file), 
-                                         shlex.quote(str(client_addr))))
-                self.file_transfer_server_recv_client_start_thread(
-                    file_transfer_command_message)
-                print(f"start to send file command: {file_transfer_command_message}")
+                if command_type=="/file":
+                    file_transfer_command_message=(
+                        "/file {} {}".format(shlex.quote(transfer_file), 
+                                            shlex.quote(str(client_addr))))
+                    self.file_transfer_server_recv_client_start_thread(
+                        file_transfer_command_message)
+                    print(f"start to send file command: {file_transfer_command_message}")
+                elif command_type=="/file_folder":
+                    folder_transfer_command_message=(
+                        "/file_folder {} {}".format(shlex.quote(transfer_file), 
+                                            shlex.quote(str(client_addr))))
+                    self.folder_file_transfer_server_recv_client_start(
+                        folder_transfer_command_message)
+                    print(f"start to send folder command: {folder_transfer_command_message}")
     def folder_file_transfer_server_recv_client_start(self, message):
         command_part=shlex.split(message)
         folder_path=command_part[1]
@@ -937,11 +983,17 @@ class TCPServer_Base:  # TCP server class
                         for addr, info in self.clients.items():
                             print(f"  {info['id']} - connection time: {info['connected_time']}")
                 elif shlex.split(deal_cmd)[0] == '/file':
-                    self.file_transfer_server_recv_client_start_thread(deal_cmd)
+                    self.file_transfer_server_recv_client_start_thread(
+                        deal_cmd)
                 elif shlex.split(deal_cmd)[0] == '/file_folder':
-                    self.folder_file_transfer_server_recv_client_start(deal_cmd)
+                    self.folder_file_transfer_server_recv_client_start(
+                        deal_cmd)
                 elif shlex.split(deal_cmd)[0] == '/multiple_file_multiple_client':
-                    self.multiple_file_multiple_client_transfer_server_recv_client_start(deal_cmd)
+                    self.multiple_file_multiple_client_transfer_server_recv_client_start(
+                        deal_cmd)
+                elif shlex.split(deal_cmd)[0] == '/diff_multiple_file_diff_multiple_client':
+                    self.diff_multiple_file_diff_multiple_client_transfer_server_recv_client_start(
+                        deal_cmd)
             except:
                 traceback.print_exc()
                 break
