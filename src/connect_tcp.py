@@ -199,6 +199,44 @@ class TCPServer_Base:  # TCP server class
                     print(f"deleting the disconnected client: {addr}")
                     self.clients[addr]['socket'].close()
                     del self.clients[addr]
+    def send_msg_to_specific_client(self, message):  # send message to specific client by client address
+        command_part=shlex.split(message)
+        del command_part[0]
+        client_message_pair_list=[]
+        client_list=[]
+        msg_list=[]
+        client_addr_times=0
+        for command_part_index in range(len(command_part)):
+            part=command_part[command_part_index]
+            if part.startswith("(") and part.endswith(")"):
+                try:
+                    client_addr=ast.literal_eval(part)
+                    client_list.append(client_addr)
+                    client_addr_times+=1
+                    if command_part_index==len(command_part)-1:
+                        client_message_pair=[client_list, msg_list]
+                        client_message_pair_list.append(client_message_pair)
+                except:
+                    traceback.print_exc()
+                    print(f"ErrorWhileParsingClientAddress: {part} is not a valid client address, skipped")
+            else:
+                if client_addr_times!=0:
+                    client_message_pair=[client_list, msg_list]
+                    client_message_pair_list.append(client_message_pair)
+                    client_list=[]
+                    msg_list=[]
+                    msg_list.append(part)
+                    client_addr_times=0
+                else:
+                    msg_list.append(part)
+        for each_client_message_pair in client_message_pair_list:
+            for client_addr in each_client_message_pair[0]:
+                for msg in each_client_message_pair[1]:
+                    if client_addr in self.clients:
+                        client_socket=self.clients[client_addr]['socket']
+                        self.send_message(client_socket, msg)
+                    else:
+                        print(f"Client {client_addr} not found, cannot send message: {msg}")
     def send_message(self, client_socket, message):  # send message to specific client
         if not self.running or not client_socket:
             print("disable the connect to server")
@@ -220,6 +258,9 @@ class TCPServer_Base:  # TCP server class
             print(f"send msg error: {e}")
             traceback.print_exc()
             return False
+    def recieve_message(self, client_socket, msg_length):  # receive message
+        data=client_socket.recv(msg_length)
+        return data
     def handle_client(self, client_socket, client_address):  # deal with each client
         client_id = f"{client_address[0]}:{client_address[1]}"
         with self.client_lock: # add new client
@@ -243,7 +284,7 @@ class TCPServer_Base:  # TCP server class
         buffer=""
         try:
             while True:
-                data = client_socket.recv(4096)  # get msg from client
+                data = self.recieve_message(client_socket, 4096)  # get msg from client
                 print(data)
                 if not data:
                     break
@@ -411,7 +452,8 @@ class TCPServer_Base:  # TCP server class
             try:
                 name_len_bytes = b''
                 while len(name_len_bytes) < 4:
-                    chunk = client_file_socket.recv(4 - len(name_len_bytes))
+                    chunk = self.recieve_message(
+                        client_file_socket, 4 - len(name_len_bytes))
                     print(chunk)
                     if not chunk:
                         try:
@@ -432,8 +474,8 @@ class TCPServer_Base:  # TCP server class
                 name_len = int.from_bytes(name_len_bytes, 'big')
                 file_name_encoded = b''
                 while len(file_name_encoded) < name_len:
-                    chunk = client_file_socket.recv(
-                        name_len - len(file_name_encoded))
+                    chunk = self.recieve_message(
+                        client_file_socket, name_len - len(file_name_encoded))
                     if not chunk:
                         try:
                             self.send_message(client_file_socket,
@@ -455,8 +497,8 @@ class TCPServer_Base:  # TCP server class
                 filename = os.path.basename(filename)
                 size_bytes = b''
                 while len(size_bytes) < 8:
-                    chunk = client_file_socket.recv(
-                        8 - len(size_bytes))
+                    chunk = self.recieve_message(
+                        client_file_socket, 8 - len(size_bytes))
                     if not chunk:
                         try:
                             self.send_message(client_file_socket,
@@ -486,7 +528,8 @@ class TCPServer_Base:  # TCP server class
                 with open(full_path.strip(), 'wb') as f:
                     remaining = file_size
                     while remaining > 0:
-                        chunk = client_file_socket.recv(min(65536, remaining))
+                        chunk = self.recieve_message(
+                            client_file_socket, min(65536, remaining))
                         if not chunk:
                             try:
                                 self.send_message(client_file_socket,
@@ -816,7 +859,8 @@ class TCPServer_Base:  # TCP server class
             nonlocal file_receive_data_from_server
             while file_running:
                 try:
-                    data = client_file_socket.recv(4096)
+                    data = self.recieve_message(
+                        client_file_socket, 4096)
                     if not data:
                         print("\nbreak the file transfer connection from server")
                         try:
@@ -982,6 +1026,8 @@ class TCPServer_Base:  # TCP server class
                     with self.client_lock:
                         for addr, info in self.clients.items():
                             print(f"  {info['id']} - connection time: {info['connected_time']}")
+                elif shlex.split(deal_cmd)[0] == '/send_msg':
+                    self.send_msg_to_specific_client(deal_cmd)
                 elif shlex.split(deal_cmd)[0] == '/file':
                     self.file_transfer_server_recv_client_start_thread(
                         deal_cmd)
@@ -1221,7 +1267,8 @@ class TCPClient_Base:  # TCP client class
         buffer = ""
         while self.running:
             try:
-                data = self.client_socket.recv(4096)
+                data = self.recieve_message(
+                    self.client_socket, 4096)
                 if not data:
                     print("\nbreak the connection from server")
                     self.running = False
@@ -1272,6 +1319,9 @@ class TCPClient_Base:  # TCP client class
             print(f"send msg error: {e}")
             traceback.print_exc()
             return False
+    def recieve_message(self, client_socket, msg_length):  # receive msg
+        data=client_socket.recv(msg_length)
+        return data
     def handle_server_command(self, command):  # deal with special command from server
         client_id = f"{self.client_host}:{self.client_ports}"
         if command.lower().split(" ")[0] == "/client_alloc_port_range":
@@ -1514,7 +1564,7 @@ class TCPClient_Base:  # TCP client class
             nonlocal file_receive_data_from_server
             while file_running:
                 try:
-                    data = client_file_socket.recv(4096)
+                    data = self.recieve_message(client_file_socket, 4096)
                     if not data:
                         print("\nbreak the file transfer connection from server")
                         try:
@@ -1715,7 +1765,8 @@ class TCPClient_Base:  # TCP client class
             try:
                 name_len_bytes = b''
                 while len(name_len_bytes) < 4:
-                    chunk = client_file_socket.recv(4 - len(name_len_bytes))
+                    chunk = self.recieve_message(
+                        client_file_socket, 4 - len(name_len_bytes))
                     print(chunk)
                     if not chunk:
                         try:
@@ -1735,8 +1786,8 @@ class TCPClient_Base:  # TCP client class
                 name_len = int.from_bytes(name_len_bytes, 'big')
                 file_name_encoded = b''
                 while len(file_name_encoded) < name_len:
-                    chunk = client_file_socket.recv(
-                        name_len - len(file_name_encoded))
+                    chunk = self.recieve_message(
+                        client_file_socket, name_len - len(file_name_encoded))
                     if not chunk:
                         try:
                             self.send_message(client_file_socket, self.error_sign)
@@ -1757,8 +1808,8 @@ class TCPClient_Base:  # TCP client class
                 filename = os.path.basename(filename)
                 size_bytes = b''
                 while len(size_bytes) < 8:
-                    chunk = client_file_socket.recv(
-                        8 - len(size_bytes))
+                    chunk = self.recieve_message(
+                        client_file_socket, 8 - len(size_bytes))
                     if not chunk:
                         try:
                             self.send_message(client_file_socket, self.error_sign)
@@ -1787,7 +1838,8 @@ class TCPClient_Base:  # TCP client class
                 with open(full_path.strip(), 'wb') as f:
                     remaining = file_size
                     while remaining > 0:
-                        chunk = client_file_socket.recv(min(65536, remaining))
+                        chunk = self.recieve_message(
+                            client_file_socket, min(65536, remaining))
                         if not chunk:
                             try:
                                 self.send_message(client_file_socket,
