@@ -8,7 +8,7 @@ import socket
 import traceback
 import threading
 from datetime import datetime
-class TCPServer_Base:  # TCP server class
+class TCP_Server_Base:  # TCP server class
     def __init__(self, host='127.0.0.1', port=65432,
                  max_clients=10, port_add_step=1, port_range_num=100,
                  max_file_transfer_thread_num=10, is_hand_alloc_port=False,
@@ -337,15 +337,18 @@ class TCPServer_Base:  # TCP server class
         client_id = f"{client_address[0]}:{client_address[1]}"
         send_str=None
         if command == '/help':
-            help_text = """
-            avalable commands:
-            /help - print help meg
-            /time - display server time
-            /clients - display connected clients
-            /file - send file to server
-            /quit - disconnect
-            """
-            send_str=help_text+"\n"
+            help_text=["avalable commands:",
+                        "/help - print help meg\n",
+                        "\t/time - display server time\n",
+                        "\t/clients - display connected clients\n",
+                        "\t/file <file_path> - send file to server\n",
+                        "\t/multiple_file <file1> <file2> ... ",
+                        "- send multiple files to server\n",
+                        "\t/file_folder <folder_path> - send folder to server\n",
+                        "\t/multiple_file_folder <folder1> <folder2> ... ",
+                        "- send multiple folders to server\n",
+                        "\t/quit - disconnect"]
+            send_str=" ".join(help_text)+"\n"
             return send_str
         elif command == '/time':
             send_str=(
@@ -1034,6 +1037,30 @@ class TCPServer_Base:  # TCP server class
                 elif shlex.split(deal_cmd)[0] == '/diff_multiple_file_diff_multiple_client':
                     self.diff_multiple_file_diff_multiple_client_transfer_server_recv_client_start(
                         deal_cmd)
+                elif shlex.split(deal_cmd)[0] == '/help':
+                    help_text=["avalable commands:",
+                                "/stop - stop the server\n",
+                                "\t/status - display server status\n",
+                                "\t/clients - display connected clients\n",
+                                "\t/send_msg <message1> <message2> ... ",
+                                "<client_id1> <client_id2> ... <messageN>",
+                                " ... <client_idN> ... - send message or ",
+                                "messages to specific client or clients\n",
+                                "\t/file <file_path> <client_id> - ",
+                                "send file to specific client\n",
+                                "\t/file_folder <folder_path> <client_id> - ",
+                                "send folder to specific client\n",
+                                "\t/multiple_file_multiple_client <file1> <file2>",
+                                " ... <client_id1> <client_id2> ... <fileN> ...",
+                                " <client_idN> ... - send multiple files to multiple",
+                                " clients, files should be before clients, ",
+                                "and clients should be in format of (ip, port)\n",
+                                "\t/diff_multiple_file_diff_multiple_client <file1> <file2>",
+                                " ... <client_id1> <client_id2> ... <fileN> ...",
+                                " <client_idN> ... - send multiple files to multiple clients",
+                                " with different file list for each client, files and clients",
+                                " should be in pairs, and clients should be in format of (ip, port)"]
+                    print("\n"+" ".join(help_text)+"\n")
             except:
                 traceback.print_exc()
                 break
@@ -1051,7 +1078,7 @@ class TCPServer_Base:  # TCP server class
         if self.server_socket:  # close server socket
             self.server_socket.close()
             print("server stopped")
-class TCPClient_Base:  # TCP client class
+class TCP_Client_Base:  # TCP client class
     def __init__(self, host=None, client_host='127.0.0.1',
                  port=65432, client_ports=None, timeout=None,
                  port_add_step=1, max_thread_num=10,
