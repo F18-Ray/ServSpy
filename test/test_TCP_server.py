@@ -5,5 +5,5 @@ if package_dictionary not in os.sys.path:
     sys.path.insert(0, package_dictionary)
 from src import connect_tcp
 def test_TCP_server():
-    connect_tcp.TCPServer_Base()
+    connect_tcp.TCP_Server_Base()
 test_TCP_server()
