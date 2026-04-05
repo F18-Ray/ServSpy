@@ -8,11 +8,12 @@ import socket
 import traceback
 import threading
 from datetime import datetime
+from threading import ThreadPoolExecutor
 class TCP_Server_Base:  # TCP server class
     def __init__(self, host='127.0.0.1', port=65432,
                  max_clients=10, port_add_step=1, port_range_num=100,
                  max_file_transfer_thread_num=10, is_hand_alloc_port=False,
-                 is_input_command_in_console=True):
+                 is_input_command_in_console=True, max_custom_workers=10):
         self.project_dir=os.path.dirname(os.path.abspath(__file__))
         self.project_info_dir=os.path.join(self.project_dir, '.ServSpy')
         if os.path.exists(self.project_info_dir)==False:
@@ -62,6 +63,10 @@ class TCP_Server_Base:  # TCP server class
             self.command_decode_table[0]["file_send_server_start_file_transfer"])
         self.error_sign=(
             self.command_decode_table[0]["file_send_resieve_error"])
+        self._custom_handlers = {}
+        self._custom_handler_threaded = {}
+        self._custom_executor = ThreadPoolExecutor(max_workers=max_custom_workers)
+        self._task_semaphore = threading.Semaphore(max_custom_workers)
         self.start_TCP_Server()
     def alloc_port(self, port_add_step, port_range_num):
         if self.is_hand_alloc_port==True:
@@ -159,44 +164,109 @@ class TCP_Server_Base:  # TCP server class
             else:
                 with open(self.port_temp_info_path, 'w', encoding='utf-8') as f:
                     f.write(str(self.server_port_info))
+    def palloc(self):
+        alloc_port=0
+        while True:
+            alloc_port=self.file_palloc()
+            time.sleep(0.1)
+            if alloc_port is not None:
+                return alloc_port
+            else:
+                alloc_port=self.spy_palloc()
+                if alloc_port is not None:
+                    return alloc_port
+                else:
+                    pass
+    def pfree(self, port):
+        self.file_pfree(port)
+        self.spy_pfree(port)
     def file_palloc(self):
-        with self.alloc_add_port_lock:
-            if self.add_latest_port + self.port_add_step > self.max_port:
-                for step in range(self.port+1, self.max_port, self.port_add_step):
-                    if step in self.all_alloced_ports_list:
-                        pass
-                    else:
-                        alloced_port=step
-                        self.all_alloced_ports_list.append(alloced_port)
-                        return alloced_port
-                return None
-            self.add_latest_port += self.port_add_step
-            self.all_alloced_ports_list.append(self.add_latest_port)
-            return self.add_latest_port
+        if self.is_hand_alloc_port:
+            with self.alloc_add_port_lock:
+                if self.add_latest_port + self.port_add_step > self.max_port:
+                    for step in range(self.port+1, self.max_port, self.port_add_step):
+                        if step in self.all_alloced_ports_list:
+                            pass
+                        else:
+                            alloced_port=step
+                            self.all_alloced_ports_list.append(alloced_port)
+                            return alloced_port
+                    return None
+                self.add_latest_port += self.port_add_step
+                self.all_alloced_ports_list.append(self.add_latest_port)
+                return self.add_latest_port
+        else:
+            return 0
     def file_pfree(self, port):
-        with self.alloc_add_port_lock:
-            if port in self.all_alloced_ports_list:
-                self.all_alloced_ports_list.remove(port)
-            self.add_latest_port-=self.port_add_step
+        if self.is_hand_alloc_port:
+            with self.alloc_add_port_lock:
+                if port in self.all_alloced_ports_list:
+                    self.all_alloced_ports_list.remove(port)
+                    print(
+                        "releasing file transfer port, current latest port:", port)
+                self.add_latest_port-=self.port_add_step
+        else:
+            pass
     def spy_palloc(self):
-        with self.alloc_minus_port_lock:
-            if self.minus_latest_port - self.port_add_step < self.min_port:
-                for step in range(self.port, self.min_port, -self.port_add_step):
-                    if step in self.all_alloced_ports_list:
-                        pass
-                    else:
-                        alloced_port=step
-                        self.all_alloced_ports_list.append(alloced_port)
-                        return alloced_port
-                return None
-            self.minus_latest_port -= self.port_add_step
-            self.all_alloced_ports_list.append(self.minus_latest_port)
-            return self.minus_latest_port
+        if self.is_hand_alloc_port:
+            with self.alloc_minus_port_lock:
+                if self.minus_latest_port - self.port_add_step < self.min_port:
+                    for step in range(self.port, self.min_port, -self.port_add_step):
+                        if step in self.all_alloced_ports_list:
+                            pass
+                        else:
+                            alloced_port=step
+                            self.all_alloced_ports_list.append(alloced_port)
+                            return alloced_port
+                    return None
+                self.minus_latest_port -= self.port_add_step
+                self.all_alloced_ports_list.append(self.minus_latest_port)
+                return self.minus_latest_port
+        else:
+            return 0
     def spy_pfree(self, port):
-        with self.alloc_minus_port_lock:
-            if port in self.all_alloced_ports_list:
-                self.all_alloced_ports_list.remove(port)
-            self.minus_latest_port+=self.port_add_step
+        if self.is_hand_alloc_port:
+            with self.alloc_minus_port_lock:
+                if port in self.all_alloced_ports_list:
+                    self.all_alloced_ports_list.remove(port)
+                self.minus_latest_port+=self.port_add_step
+        else:
+            pass
+    def register_command(self, command_name, handler, run_in_thread=False):
+        self._custom_handlers[command_name] = handler
+        self._custom_handler_threaded[command_name] = run_in_thread
+    def submit_task(self, func, *args, **kwargs):
+        self._task_semaphore.acquire()
+        future = self._custom_executor.submit(func, *args, **kwargs)
+        future.add_done_callback(lambda f: self._task_semaphore.release())
+        return future
+    def create_temporary_server(self, handler, port=None, max_connections=1):
+        if port is None:
+            port = self.palloc()
+            if port is None:
+                raise RuntimeError("No available port for temporary server")
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        server_socket.bind((self.host, port))
+        server_socket.listen(max_connections)
+        stop_event = threading.Event()
+        def server_loop():
+            while not stop_event.is_set():
+                try:
+                    server_socket.settimeout(1.0)
+                    client_sock, addr = server_socket.accept()
+                    threading.Thread(target=handler, args=(client_sock, addr), daemon=True).start()
+                except socket.timeout:
+                    continue
+                except Exception as e:
+                    if not stop_event.is_set():
+                        print(f"Temporary server error: {e}")
+                    break
+            server_socket.close()
+            self.pfree(port)
+        server_thread = threading.Thread(target=server_loop, daemon=True)
+        server_thread.start()
+        return port, server_thread, stop_event
     def broadcast(self, message, exclude_client=None): # broadcast message to all clients except exclude_client
         with self.client_lock:
             disconnected_clients = []
@@ -379,6 +449,34 @@ class TCP_Server_Base:  # TCP server class
                 except:
                     traceback.print_exc()
                     pass
+        cmd_parts = shlex.split(command.strip())
+        if not cmd_parts:
+            return None
+        cmd_name = cmd_parts[0].lower()
+        if cmd_name in self._custom_handlers:
+            handler = self._custom_handlers[cmd_name]
+            run_in_thread = self._custom_handler_threaded.get(cmd_name, False)
+            if run_in_thread:
+                self._custom_executor.submit(
+                    self._execute_custom_handler, handler, client_socket, client_address, command
+                )
+                return "Command received, processing in background.\n"
+            else:
+                response = self._execute_custom_handler(handler, client_socket, client_address, command)
+                return response
+        else:
+            return f"Unknown command: {command}\n"
+    def _execute_custom_handler(self, handler, client_socket, client_address, command):
+        try:
+            result = handler(client_socket, client_address, command, self)
+            if result is not None:
+                if isinstance(result, str) and not result.endswith('\n'):
+                    result += '\n'
+                self.send_message(client_socket, result)
+        except Exception as e:
+            error_msg = f"Error in custom command handler: {e}\n"
+            traceback.print_exc()
+            self.send_message(client_socket, error_msg)
     def file_folder_transfer_server_recv_server_start_thread(  # start a file folder server thread on server
             self, command, client_id, client_socket):
         relative_folder_path=shlex.split(command)[1]
@@ -404,22 +502,11 @@ class TCP_Server_Base:  # TCP server class
         file_transfer_server_recv_server_start_thread.start()
     def file_transfer_server_recv_server_start(  # deal with file transfer request server on server from client and receive file from client
             self, client_id, client_socket, command, new_save_path=None, file_name=None):
-        file_transfer_server_port=0
-        if self.is_hand_alloc_port==True:
-            while True:
-                time.sleep(0.1)
-                file_transfer_server_port=self.file_palloc()
-                if file_transfer_server_port!=None:
-                    break
-        else:
-            file_transfer_server_port=0
+        file_transfer_server_port=self.palloc()
         self.file_transfer_mode_recv(
             self.host, file_transfer_server_port,
             client_socket, client_id, new_save_path, file_name, command)
-        if self.is_hand_alloc_port==True:
-            self.file_pfree(file_transfer_server_port)
-            print(
-                "releasing file transfer port, current latest port:", file_transfer_server_port)
+        self.pfree(file_transfer_server_port)
     def file_transfer_mode_recv(self, server_file_address, server_file_port,
                                 client_socket, client_id, new_save_path, file_name, command):
         file_running=True
@@ -779,17 +866,7 @@ class TCP_Server_Base:  # TCP server class
             else:
                 filename = shlex.split(message)[1]
             self.send_message(client_socket, send_msg)
-            file_transfer_client_port=None
-            if self.is_hand_alloc_port==True:
-                file_transfer_client_port=self.file_palloc()
-                if file_transfer_client_port==None:
-                    while True:
-                        time.sleep(0.1)
-                        file_transfer_client_port=self.file_palloc()
-                        if file_transfer_client_port!=None:
-                            break
-            else:
-                file_transfer_client_port=0
+            file_transfer_client_port=self.palloc()
             file_server_port=None
             is_find_port=True
             while is_find_port:
@@ -810,10 +887,7 @@ class TCP_Server_Base:  # TCP server class
                     return False
             self.file_transfer_mode(filename, client_address, file_server_port,
                                     file_transfer_client_port)
-            if self.is_hand_alloc_port==True:
-                self.file_pfree(file_transfer_client_port)
-                print(
-                    "releasing file transfer port, current latest port:", file_transfer_client_port)
+            self.pfree(file_transfer_client_port)
         except IndexError:
             print("invalid command, please use '/file <filename>'")
             traceback.print_exc()
@@ -1082,7 +1156,8 @@ class TCP_Client_Base:  # TCP client class
     def __init__(self, host=None, client_host='127.0.0.1',
                  port=65432, client_ports=None, timeout=None,
                  port_add_step=1, max_thread_num=10,
-                 is_input_command_in_console=True, is_wait_server=True):
+                 is_input_command_in_console=True, is_wait_server=True,
+                 max_custom_workers=10):
         self.project_dir=os.path.dirname(os.path.abspath(__file__))
         self.file_transfer_dir=os.path.join(
             self.project_dir, 'received_files')
@@ -1141,7 +1216,14 @@ class TCP_Client_Base:  # TCP client class
             self.command_decode_table[0]["file_send_server_start_file_transfer"])
         self.error_sign=(
             self.command_decode_table[0]["file_send_resieve_error"])
+        self._custom_handlers = {}
+        self._custom_handler_threaded = {}
+        self._custom_executor = ThreadPoolExecutor(max_workers=max_custom_workers)
+        self._task_semaphore = threading.Semaphore(max_custom_workers)
         self.start_TCP_client()
+    def register_command(self, command_name, handler, run_in_thread=False):
+        self._custom_handlers[command_name] = handler
+        self._custom_handler_threaded[command_name] = run_in_thread
     def alloc_port(self, port_add_step, port_range_num):
         if self.is_hand_alloc_port==True:
             while self.is_client_port_temp_info_file_locked():
@@ -1237,44 +1319,104 @@ class TCP_Client_Base:  # TCP client class
             else:
                 with open(self.port_temp_info_path, 'w', encoding='utf-8') as f:
                     f.write(str(self.client_port_info))
+    def palloc(self):
+        alloc_port=0
+        while True:
+            alloc_port=self.file_palloc()
+            time.sleep(0.1)
+            if alloc_port is not None:
+                return alloc_port
+            else:
+                alloc_port=self.spy_palloc()
+                if alloc_port is not None:
+                    return alloc_port
+                else:
+                    pass
+    def pfree(self, port):
+        self.file_pfree(port)
+        self.spy_pfree(port)
     def file_palloc(self):
-        with self.alloc_add_port_lock:
-            if self.add_latest_port + self.port_add_step > self.max_port:
-                for step in range(self.port+1, self.max_port, self.port_add_step):
-                    if step in self.all_alloced_ports_list:
-                        pass
-                    else:
-                        alloced_port=step
-                        self.all_alloced_ports_list.append(alloced_port)
-                        return alloced_port
-                return None
-            self.add_latest_port += self.port_add_step
-            self.all_alloced_ports_list.append(self.add_latest_port)
-            return self.add_latest_port
+        if self.is_hand_alloc_port:
+            with self.alloc_add_port_lock:
+                if self.add_latest_port + self.port_add_step > self.max_port:
+                    for step in range(self.port+1, self.max_port, self.port_add_step):
+                        if step in self.all_alloced_ports_list:
+                            pass
+                        else:
+                            alloced_port=step
+                            self.all_alloced_ports_list.append(alloced_port)
+                            return alloced_port
+                    return None
+                self.add_latest_port += self.port_add_step
+                self.all_alloced_ports_list.append(self.add_latest_port)
+                return self.add_latest_port
+        else:
+            return 0
     def file_pfree(self, port):
-        with self.alloc_add_port_lock:
-            if port in self.all_alloced_ports_list:
-                self.all_alloced_ports_list.remove(port)
-            self.add_latest_port-=self.port_add_step
+        if self.is_hand_alloc_port:
+            with self.alloc_add_port_lock:
+                if port in self.all_alloced_ports_list:
+                    self.all_alloced_ports_list.remove(port)
+                    print(
+                        "releasing file transfer port, current latest port:", port)
+                self.add_latest_port-=self.port_add_step
+        else:
+            pass
     def spy_palloc(self):
-        with self.alloc_minus_port_lock:
-            if self.minus_latest_port - self.port_add_step < self.min_port:
-                for step in range(self.port, self.min_port, -self.port_add_step):
-                    if step in self.all_alloced_ports_list:
-                        pass
-                    else:
-                        alloced_port=step
-                        self.all_alloced_ports_list.append(alloced_port)
-                        return alloced_port
-                return None
-            self.minus_latest_port -= self.port_add_step
-            self.all_alloced_ports_list.append(self.minus_latest_port)
-            return self.minus_latest_port
+        if self.is_hand_alloc_port:
+            with self.alloc_minus_port_lock:
+                if self.minus_latest_port - self.port_add_step < self.min_port:
+                    for step in range(self.port, self.min_port, -self.port_add_step):
+                        if step in self.all_alloced_ports_list:
+                            pass
+                        else:
+                            alloced_port=step
+                            self.all_alloced_ports_list.append(alloced_port)
+                            return alloced_port
+                    return None
+                self.minus_latest_port -= self.port_add_step
+                self.all_alloced_ports_list.append(self.minus_latest_port)
+                return self.minus_latest_port
+        else:
+            return 0
     def spy_pfree(self, port):
-        with self.alloc_minus_port_lock:
-            if port in self.all_alloced_ports_list:
-                self.all_alloced_ports_list.remove(port)
-            self.minus_latest_port+=self.port_add_step
+        if self.is_hand_alloc_port:
+            with self.alloc_minus_port_lock:
+                if port in self.all_alloced_ports_list:
+                    self.all_alloced_ports_list.remove(port)
+                    print(
+                        "releasing file transfer port, current latest port:", port)
+                self.minus_latest_port+=self.port_add_step
+        else:
+            pass
+    def submit_task(self, func, *args, **kwargs):
+        self._task_semaphore.acquire()
+        future = self._custom_executor.submit(func, *args, **kwargs)
+        future.add_done_callback(lambda f: self._task_semaphore.release())
+        return future
+    def create_temporary_client(self, server_host, server_port, bind_port=None, on_data=None):
+        client_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if bind_port is not None:
+            client_sock.bind((self.client_host, bind_port))
+        client_sock.connect((server_host, server_port))
+        stop_event = threading.Event()
+        def receiver():
+            while not stop_event.is_set():
+                try:
+                    client_sock.settimeout(1.0)
+                    data = client_sock.recv(4096)
+                    if not data:
+                        break
+                    if on_data:
+                        on_data(data, client_sock)
+                except socket.timeout:
+                    continue
+                except:
+                    break
+            client_sock.close()
+        recv_thread = threading.Thread(target=receiver, daemon=True)
+        recv_thread.start()
+        return client_sock, recv_thread, stop_event
     def connect(self):  # connect to server
         while True:
             try:
@@ -1404,6 +1546,19 @@ class TCP_Client_Base:  # TCP client class
         elif shlex.split(command.lower())[0] == "/file_folder":
             self.file_folder_transfer_client_recv_server_start_thread(
                 command, client_id, self.client_socket)
+        cmd_parts = shlex.split(command.strip())
+        if not cmd_parts:
+            return
+        cmd_name = cmd_parts[0].lower()
+        if cmd_name in self._custom_handlers:
+            handler = self._custom_handlers[cmd_name]
+            run_in_thread = self._custom_handler_threaded.get(cmd_name, False)
+            if run_in_thread:
+                self._custom_executor.submit(handler, command, self)
+            else:
+                handler(command, self)
+        else:
+            print(f"Unknown server command: {command}")
     def interactive_mode(self):  # Interactive mode
         try:
             while self.running:
@@ -1532,17 +1687,7 @@ class TCP_Client_Base:  # TCP client class
             else:
                 filename = shlex.split(message)[1]
             self.send_message(self.client_socket, send_msg)
-            file_transfer_client_port=None
-            if self.is_hand_alloc_port==True:
-                file_transfer_client_port=self.file_palloc()
-                if file_transfer_client_port==None:
-                    while True:
-                        time.sleep(0.1)
-                        file_transfer_client_port=self.file_palloc()
-                        if file_transfer_client_port!=None:
-                            break
-            else:
-                file_transfer_client_port=0
+            file_transfer_client_port=self.palloc()
             file_server_port=None
             is_find_port=True
             while is_find_port:
@@ -1564,10 +1709,7 @@ class TCP_Client_Base:  # TCP client class
             self.file_transfer_mode(filename, self.host,
                                     file_server_port,
                                     file_transfer_client_port)
-            if self.is_hand_alloc_port==True:
-                self.file_pfree(file_transfer_client_port)
-                print(
-                    "releasing file transfer port, current latest port:", self.latest_port)
+            self.pfree(file_transfer_client_port)
         except IndexError:
             traceback.print_exc()
             print("invalid command, please use '/file <filename>'")
@@ -1742,22 +1884,11 @@ class TCP_Client_Base:  # TCP client class
         file_transfer_client_recv_server_start_thread.start()
     def file_transfer_client_recv_server_start(
             self, client_id, client_socket, command, new_save_path=None, file_name=None):
-        file_transfer_server_port=0
-        if self.is_hand_alloc_port==True:
-            while True:
-                time.sleep(0.1)
-                file_transfer_server_port=self.file_palloc()
-                if file_transfer_server_port!=None:
-                    break
-        else:
-            file_transfer_server_port=0
+        file_transfer_server_port=self.palloc()
         self.file_transfer_mode_recv(
             self.host, file_transfer_server_port,
             client_socket, client_id, new_save_path, file_name, command)
-        if self.is_hand_alloc_port==True:
-            self.file_pfree(file_transfer_server_port)
-            print(
-                "releasing file transfer port, current latest port:", file_transfer_server_port)
+        self.pfree(file_transfer_server_port)
     def file_transfer_mode_recv(self, server_file_address, server_file_port,
                                 client_socket, client_id, new_save_path, file_name, command):
         file_running=True
