@@ -8,7 +8,7 @@ import socket
 import traceback
 import threading
 from datetime import datetime
-from threading import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 class TCP_Server_Base:  # TCP server class
     def __init__(self, host='127.0.0.1', port=65432,
                  max_clients=10, port_add_step=1, port_range_num=100,
@@ -473,10 +473,13 @@ class TCP_Server_Base:  # TCP server class
                 if isinstance(result, str) and not result.endswith('\n'):
                     result += '\n'
                 self.send_message(client_socket, result)
+                return result
+            return None
         except Exception as e:
             error_msg = f"Error in custom command handler: {e}\n"
             traceback.print_exc()
             self.send_message(client_socket, error_msg)
+            return error_msg
     def file_folder_transfer_server_recv_server_start_thread(  # start a file folder server thread on server
             self, command, client_id, client_socket):
         relative_folder_path=shlex.split(command)[1]
