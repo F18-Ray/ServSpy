@@ -63,8 +63,8 @@ class TCP_Server_Base:  # TCP server class
             self.command_decode_table[0]["file_send_server_start_file_transfer"])
         self.error_sign=(
             self.command_decode_table[0]["file_send_resieve_error"])
-        self._custom_handlers = {}
-        self._custom_handler_threaded = {}
+        self._custom_handlers = {{}, {}}
+        self._custom_handler_threaded = {{}, {}}
         self._custom_executor = ThreadPoolExecutor(max_workers=max_custom_workers)
         self._task_semaphore = threading.Semaphore(max_custom_workers)
         self.start_TCP_Server()
@@ -233,8 +233,16 @@ class TCP_Server_Base:  # TCP server class
         else:
             pass
     def register_command(self, command_name, handler, where_to_run, run_in_thread=False):
-        self._custom_handlers[[command_name, where_to_run]] = handler
-        self._custom_handler_threaded[[command_name, where_to_run]] = run_in_thread
+        registe_index=None
+        if where_to_run=="server":
+            registe_index=0
+        elif where_to_run=="client":
+            registe_index=1
+        else:
+            print(f"Invalid where_to_run value: {where_to_run}, must be 'server' or 'client'")
+            return False
+        self._custom_handlers[registe_index][command_name] = handler
+        self._custom_handler_threaded[registe_index][command_name] = run_in_thread
     def submit_task(self, func, *args, **kwargs):
         self._task_semaphore.acquire()
         future = self._custom_executor.submit(func, *args, **kwargs)
@@ -477,10 +485,10 @@ class TCP_Server_Base:  # TCP server class
         if not cmd_parts:
             return None
         cmd_name = cmd_parts[0].lower()
-        if ([cmd_name, "server"] in self._custom_handlers):
-            handler = self._custom_handlers[[cmd_name, "server"]]
-            run_in_thread = self._custom_handler_threaded.get(
-                [cmd_name, "server"], False)
+        if (cmd_name in self._custom_handlers[0]):
+            handler = self._custom_handlers[0][cmd_name]
+            run_in_thread = self._custom_handler_threaded[0].get(
+                cmd_name, False)
             if run_in_thread:
                 self._custom_executor.submit(
                     self._execute_custom_handler, handler, command,
@@ -1174,10 +1182,10 @@ class TCP_Server_Base:  # TCP server class
                 if not cmd_parts:
                     return None
                 cmd_name = cmd_parts[0].lower()
-                if ([cmd_name, "client"] in self._custom_handlers):
-                    handler = self._custom_handlers[[cmd_name, "client"]]
-                    run_in_thread = self._custom_handler_threaded.get(
-                        [cmd_name, "client"], False)
+                if (cmd_name in self._custom_handlers[1]):
+                    handler = self._custom_handlers[1][cmd_name]
+                    run_in_thread = self._custom_handler_threaded[1].get(
+                        cmd_name, False)
                     if run_in_thread:
                         self._custom_executor.submit(
                             self._execute_custom_handler, handler, deal_cmd)
@@ -1267,14 +1275,22 @@ class TCP_Client_Base:  # TCP client class
             self.command_decode_table[0]["file_send_server_start_file_transfer"])
         self.error_sign=(
             self.command_decode_table[0]["file_send_resieve_error"])
-        self._custom_handlers = {}
-        self._custom_handler_threaded = {}
+        self._custom_handlers = {{}, {}}
+        self._custom_handler_threaded = {{}, {}}
         self._custom_executor = ThreadPoolExecutor(max_workers=max_custom_workers)
         self._task_semaphore = threading.Semaphore(max_custom_workers)
         self.start_TCP_client()
     def register_command(self, command_name, handler, where_to_run, run_in_thread=False):
-        self._custom_handlers[command_name, where_to_run] = handler
-        self._custom_handler_threaded[command_name, where_to_run] = run_in_thread
+        registe_index=None
+        if where_to_run=="server":
+            registe_index=0
+        elif where_to_run=="client":
+            registe_index=1
+        else:
+            print(f"Invalid where_to_run value: {where_to_run}, must be 'server' or 'client'")
+            return False
+        self._custom_handlers[registe_index][command_name] = handler
+        self._custom_handler_threaded[registe_index][command_name] = run_in_thread
     def submit_task(self, func, *args, **kwargs):
         self._task_semaphore.acquire()
         future = self._custom_executor.submit(func, *args, **kwargs)
@@ -1632,10 +1648,10 @@ class TCP_Client_Base:  # TCP client class
         if not cmd_parts:
             return
         cmd_name = cmd_parts[0].lower()
-        if [cmd_name, "server"] in self._custom_handlers:
-            handler = self._custom_handlers[cmd_name, "server"]
-            run_in_thread = self._custom_handler_threaded.get(
-                [cmd_name, "server"], False)
+        if cmd_name in self._custom_handlers[0]:
+            handler = self._custom_handlers[0][cmd_name]
+            run_in_thread = self._custom_handler_threaded[0].get(
+                cmd_name, False)
             if run_in_thread:
                 self.submit_task(self._execute_custom_handler,
                                  handler, command, self.client_socket, client_id)
@@ -1688,10 +1704,10 @@ class TCP_Client_Base:  # TCP client class
                         else:
                             self.send_message(self.client_socket, message)
                         cmd_name = message[0].lower()
-                        if [cmd_name, "client"] in self._custom_handlers:
-                            handler = self._custom_handlers[cmd_name, "client"]
-                            run_in_thread = self._custom_handler_threaded.get(
-                                [cmd_name, "client"], False)
+                        if cmd_name in self._custom_handlers[1]:
+                            handler = self._custom_handlers[1][cmd_name]
+                            run_in_thread = self._custom_handler_threaded[1].get(
+                                cmd_name, False)
                             if run_in_thread:
                                 self.submit_task(self._execute_custom_handler,
                                                 handler, message, self.client_socket, client_id)
