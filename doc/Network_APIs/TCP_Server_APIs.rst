@@ -5,7 +5,7 @@ TCP Server setup API
 --------------------
 
 The TCP Server Setup API is used to create a TCP server. 
-The server in the protocal is usually use to connect and 
+The server in the protocal is usually used to connect and 
 listen to the TCP clients and handle the data from the 
 clients.
 
@@ -45,5 +45,34 @@ Every parameters are all have default values:
 
 The TCP Server Setup API will initialize all the necessary 
 parameters and resources for the TCP server.
+
+*Note: In the main class of the TCP server setup API, 
+we initialize the ``self.start_TCP_Server()`` method 
+to setup all functions which are needed in the TCP server, 
+including the server socket or handle clients etc..* 
+
+.. code-block:: python
+
+    def start_TCP_Server(self: Self) -> Any: ...
+
+In the ``start_TCP_Server`` method, we first create a 
+TCP server socket and bind it to the ``self.host`` and 
+``self.port`` which are initialized in the ``__init__`` method. 
+
+*Note: The server socket which is set up in the ``start_TCP_Server`` 
+method is based on IPv4 form.*
+
+Secondly, according to the ``self.is_input_command_in_console`` 
+parameter, we will start a thread to listen to the console 
+input of the server or not.
+
+After that, a main loop to accept clients will be started.
+
+*Note: there is another gloable variable ``self.running`` 
+which is turned to ``True`` after the server socket is 
+successfully created. The ``self.running`` variable is 
+used to control the main loop of the TCP server, and it 
+will be turned to ``False`` when the server is shutting down.*
+
 
 
