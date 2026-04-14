@@ -1203,9 +1203,19 @@ class TCP_Server_Base:  # TCP server class
                             return response
                     else:
                         print("Unrecognized command, input '/help' for available commands")
+            except KeyboardInterrupt:
+                print("\nKeyboardInterrupt received, shutting down...")
+                self.running = False
+                self.stop()
+                break
+            except EOFError:
+                print("EOF received, shutting down...")
+                self.running = False
+                self.stop()
+                break
             except:
                 traceback.print_exc()
-                break
+                pass
     def stop(self):  # shutting down the server
         self.running = False
         self.free_port()
@@ -1731,14 +1741,22 @@ class TCP_Client_Base:  # TCP client class
                                 self.send_message(self.client_socket, message)
                                 print(f"Unknown server command: {message}")
                 except KeyboardInterrupt:
+                    self.close()
                     print("\nshutting down...")
                     traceback.print_exc()
                     self.send_message(self.client_socket, '/quit')
                     time.sleep(0.5)
                     break
                 except EOFError:
+                    self.close()
+                    print("\nshutting down...")
                     traceback.print_exc()
+                    self.send_message(self.client_socket, '/quit')
+                    time.sleep(0.5)
                     break
+                except:
+                    traceback.print_exc()
+                    pass
         finally:
             self.close()
     def multiple_folder_file_transfer_client_recv_client_start(self, message):
