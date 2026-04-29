@@ -84,5 +84,21 @@ class.
 
 If the number of the clients is already over the limit of the connect 
 number, the server will send a overload message and close the connect. 
-But if it didn't over the limit, the server will 
+But if it didn't over the limit, the server will setup a clients 
+handlers function ``handle_client`` and the server handler function 
+is defined as:
+
+.. code-block:: python
+
+    def handle_client(
+        self: Self, client_socket: Any, client_address: Any) -> Any: ...
+
+*Note: For more details of ``handle_client`` function, please visit ...*
+
+So what can the setup function fo if the it run failed? 
+
+First, the try and except code block in the main server loop 
+will detect if the error is an ``OSError``. If it is, the 
+main loop will exit directly, because the oserror is a very 
+series error with security danger.
 
