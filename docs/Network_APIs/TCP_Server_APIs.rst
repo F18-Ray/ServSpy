@@ -168,13 +168,20 @@ connection is accepted and is responsible for:
 the arguments which has been defined in the 
 ``TCP_Server_Base`` class. The args which you can 
 change are ``port_add_step``, ``port_range_num`` 
-and ``is_hand_alloc_port``. And for more information, 
-please visit ...*
+and ``is_hand_alloc_port``.*
 
 - receiving raw bytes from the socket using ``recieve_message``
 - buffering incoming data until newline-terminated messages are complete
 - splitting and processing each message line-by-line
 - routing special commands beginning with ``/`` to ``handle_command``
+
+*Note: The ``handle_command`` function is defined as:*
+
+.. code-block:: python
+
+    def handle_command(self: Self, client_socket: Any, client_address: Any, command: Any) -> None:
+        ...
+
 - logging normal chat messages and acknowledging receipt
 - removing the client from ``self.clients`` and closing the socket when the client disconnects or an error occurs
 
@@ -206,3 +213,5 @@ It verifies the server is running and the socket is valid, then:
 These methods form the server's client I/O loop 
 and ensure reliable message exchange for connected 
 TCP clients.
+
+TCP Server 
