@@ -4,191 +4,264 @@ The TCP Client APIs
 TCP Client setup API
 --------------------
 
-The TCP Client Setup API is used to create and manage a TCP client
-that connects to a `TCP_Server_Base` instance and supports message
-exchange, interactive console input, and file transfer operations.
+The TCP Client Setup API is used to create a TCP client that connects to
+``TCP_Server_Base`` and supports message exchange, extension commands,
+interactive console input, and file transfer.
 
 .. code-block:: python
 
-		class TCP_Client_Base:
-				def __init__(
-						self: Self, host: Any=None, client_host: Any='127.0.0.1',
-						port: Any=65432, client_port: Any=None, timeout: Any=None,
-						port_add_step: Any=1, max_thread_num: Any=10,
-						is_input_command_in_console: Any=True, is_wait_server: Any=True,
-						max_custom_workers: Any=10, is_extend_command: Any=False) -> None: ...
+    class TCP_Client_Base:
+        def __init__(
+            self: Self, host: Any=None,
+            client_host: Any='127.0.0.1',
+            port: Any=65432,
+            client_port: Any=None,
+            timeout: Any=None,
+            port_add_step: Any=1,
+            max_thread_num: Any=10,
+            is_input_command_in_console: Any=True,
+            is_wait_server: Any=True,
+            max_custom_workers: Any=10,
+            is_extend_command: Any=False) -> None: ...
 
-The parameters of the ``__init__`` method are as follows:
+The constructor initializes the client environment and internal state.
+The arguments are:
 
-- ``host``: Optional server host to connect to. If ``None``, the
-	client may be used in passive or temporary modes.
-- ``client_host``: The local address to bind the client socket to.
-- ``port``: The server port to connect to (default ``65432``).
-- ``client_port``: Optional local port to bind the client to.
-- ``timeout``: Optional socket timeout in seconds.
-- ``port_add_step``: Step used when auto-allocating ephemeral ports.
-- ``max_thread_num``: Maximum threads for client internal tasks.
-- ``is_input_command_in_console``: Whether the client accepts console input.
-- ``is_wait_server``: Whether the client should wait for server availability on connect.
-- ``max_custom_workers``: Maximum workers for custom task executor.
-- ``is_extend_command``: Enable extension command handling.
+- ``host``: Server host to connect to. If ``None``, the client may be
+  used for temporary socket modes or manual connect management.
+- ``client_host``: Local interface used when binding client sockets.
+- ``port``: Server port to connect to (default ``65432``).
+- ``client_port``: Optional explicit local port to bind before connect.
+- ``timeout``: Optional socket timeout in seconds for connect operations.
+- ``port_add_step``: Port step used by manual port allocation.
+- ``max_thread_num``: Semaphore limit for concurrent file-transfer threads.
+- ``is_input_command_in_console``: If ``True``, the client runs a console
+  input loop for user commands.
+- ``is_wait_server``: If ``True``, connect retry logic will wait for the
+  server to become available instead of failing immediately.
+- ``max_custom_workers``: Maximum worker threads for custom commands.
+- ``is_extend_command``: If ``True``, the client does not auto-start.
 
-The client initializes internal resources such as an internal
-thread-pool, command handler registries, port allocation helpers,
-and file-transfer state needed for sending and receiving files.
+The constructor also prepares the project temp directory under
+``.ServSpy/temp_info``, loads the command decode table from
+``decode_command_table.json``, initializes the thread pool, and sets up
+file-transfer state.
 
-Core connection methods
------------------------
+.. note::
+
+    When ``is_extend_command`` is ``False``, the constructor automatically
+    calls ``start_TCP_client()`` and begins the client lifecycle.
+
+TCP Client connection API
+-------------------------
 
 .. code-block:: python
 
-		def connect(self: Self) -> None: ...
-		def start_TCP_client(self: Self) -> None: ...
-		def close(self: Self) -> None: ...
+    def connect(self: Self) -> bool: ...
+    def receive_messages(self: Self) -> None: ...
+    def close(self: Self) -> None: ...
+    def start_TCP_client(self: Self) -> None: ...
 
-``connect`` opens a socket to the configured ``host`` and ``port``
-and starts background message receivers. ``start_TCP_client`` is the
-higher-level helper that manages connection retry logic according to
-``is_wait_server``. ``close`` cleanly shuts down the client, closes
-the socket, and releases any allocated ports.
+``connect`` creates a TCP socket, binds to ``client_host`` and
+``client_port`` if configured, and connects to ``host:port``. On
+success, it starts ``receive_messages`` on a background thread.
 
-Client I/O helpers
+If ``is_wait_server`` is ``True`` the client will keep waiting for the
+server to start when the connection is refused or times out. If
+``is_wait_server`` is ``False``, connection failures are reported and
+``connect`` returns ``False``.
+
+``receive_messages`` reads UTF-8 data from the server socket into a
+newline-delimited buffer. Each complete message line is printed and
+commands starting with ``/`` are passed to ``handle_server_command``.
+
+``close`` stops the client, closes the socket, and releases allocated
+ports if manual port allocation is enabled.
+
+TCP Client I/O API
 ------------------
 
-The client mirrors the server's simple I/O helpers for sending and
-receiving newline-framed messages.
+The client provides small helpers for socket I/O.
 
 .. code-block:: python
 
-		def send_message(self: Self, client_socket: Any, message: Any) -> bool: ...
-		def recieve_message(self: Self, client_socket: Any, msg_length: int) -> bytes: ...
+    def send_message(self: Self, client_socket: Any, message: Any) -> bool: ...
+    def recieve_message(self: Self, client_socket: Any, msg_length: int) -> bytes: ...
 
-``send_message`` accepts ``str`` or ``bytes`` payloads, ensures a
-trailing newline for string payloads, encodes to UTF-8, and calls
-``sendall``. ``recieve_message`` is a thin wrapper over
-``socket.recv`` for the requested number of bytes.
+``send_message`` accepts ``str`` or ``bytes`` payloads, appends a newline
+for text messages, encodes UTF-8, and sends the complete payload with
+``sendall``.
 
-Message handling and commands
------------------------------
+``recieve_message`` wraps ``socket.recv`` and returns raw bytes from the
+socket.
 
-The client processes server messages similarly to the server's
-``handle_client`` loop. Messages beginning with ``/`` are treated as
-commands and routed to ``handle_server_command``. Built-in client
-commands and interactive behaviors include:
+TCP Client command API
+----------------------
 
-- ``/help``: print available client-side commands and usage hints.
-- ``/time``: request or display server time responses.
-- ``/quit``: disconnect the client.
+The client supports built-in commands from the server and custom
+extensible commands via ``register_command``.
 
-The client exposes an extension API for registering custom commands:
+Built-in server-driven commands handled by
+``handle_server_command`` include:
 
-.. code-block:: python
-
-		def register_command(
-				self: Self, command_name: Any, handler: Any,
-				where_to_run: Any, run_in_thread: bool=False) -> bool: ...
-
-Arguments are the same conceptually as the server-side API: the
-``command_name`` should start with a slash, ``handler`` is a callable
-that will be invoked with `(client_socket, client_address, command)`
-for commands coming from the server, or with `(None, None, command)`
-for console-run commands when ``where_to_run`` indicates a console
-handler. The ``run_in_thread`` boolean controls whether the handler
-is executed synchronously or on the client's thread pool.
-
-The client uses ``_execute_custom_handler`` and ``submit_task`` to
-invoke registered handlers the same way the server does; errors are
-caught and logged and, when appropriate, sent back to the remote
-peer.
-
-File transfer flows (client perspective)
-----------------------------------------
-
-The client implements both sending files to the server (client-to-server)
-and receiving files initiated by the server (server-to-client).
-
-Client-to-server transfer flow:
-
-1. The client issues a command such as ``/file <path> <client_id>`` or
-	 ``/file_folder <path> <client_id>`` to the server socket.
-2. The server responds with an internal coordination message:
-	 ``/server_file_transfer_port <port> <client_id>`` providing the
-	 ephemeral transfer port.
-3. The client connects to the provided transfer port and performs the
-	 length-prefixed filename and file-size handshake, then streams file
-	 bytes to the server.
-
-Server-to-client transfer flow:
-
-- The server may instruct the client to prepare to receive files by
-	sending transfer commands. The client will open a temporary
-	listening socket (when required) and accept the incoming file
-	transfer connection. Received files are written to the client's
-	configured receive directory.
-
-Low-level transfer helpers on the client include:
-
-- ``file_transfer_mode``: client-side code that initiates an outgoing
-	transfer to a remote transfer port.
-- ``file_transfer_mode_recv``: client-side receive routine for
-	handling incoming file data and metadata.
-- Threaded helpers that start per-transfer threads and enforce the
-	client's semaphore limits for concurrent file transfers.
-
-Temporary servers and clients
------------------------------
-
-To avoid interfering with the main client socket, the client provides
-convenience helpers to create short-lived temporary sockets used for
-file transfers or other out-of-band operations:
+- ``/client_alloc_port_range <range>``: enables manual port allocation
+  using the server-provided per-client range.
+- ``/client_alloc_port_range no_limit``: disables manual port
+  allocation and allows the client to use default dynamic ports.
+- ``/server_file_transfer_port <port> <client_id>``: received from the
+  server to coordinate the ephemeral file transfer port.
+- ``/file <...>``: triggers the client file send flow initiated by the
+  server.
+- ``/file_folder <...>``: triggers the client folder receive flow
+  initiated by the server.
 
 .. code-block:: python
 
-		def create_temporary_server(
-				self: Self, handler: Any, port: Any=None, max_connections: int=1) -> Any: ...
+    def register_command(
+        self: Self,
+        command_name: Any,
+        handler: Any,
+        where_to_run: Any,
+        run_in_thread: bool=False) -> bool: ...
 
-		def create_temporary_client(
-				self: Self, server_host: Any, server_port: Any,
-				bind_port: Any=None, on_data: Any=None) -> Any: ...
+This API registers a custom command handler for either server-originated
+commands or console-side commands.
 
-These helpers return a running background thread or a tuple that
-manages the temporary socket and a stop event so callers may interact
-with the temporary connection and tear it down cleanly.
+- ``command_name``: command string, typically starting with ``/``.
+- ``handler``: callable invoked with ``(client_socket, client_address,
+  command)`` for server-side commands or ``(message, client_socket,
+  client_id)`` for console-side handlers.
+- ``where_to_run``: ``"server"`` for commands received from the server,
+  ``"client"`` for console-side commands.
+- ``run_in_thread``: if ``True``, the handler runs on the client thread
+  pool via ``submit_task``.
 
-Port allocation and manual allocation mode
-------------------------------------------
+The client stores handlers in two registries:
+``_custom_handlers[0]`` for server-side commands and
+``_custom_handlers[1]`` for client console commands.
+``_execute_custom_handler`` catches exceptions and optionally sends
+error replies back to the server.
 
-The client mirrors the server's port allocation APIs to acquire
-ephemeral ports when needed. When ``is_hand_alloc_port`` is enabled,
-the client will use lock files and a shared temp-info path to avoid
-port collisions across processes. Key methods include:
+Interactive console commands
+----------------------------
 
-- ``alloc_port`` / ``free_port``: top-level allocation and release.
-- ``hand_alloc_port`` / ``hand_free_port``: manual allocation helpers
-	that persist port state to files under the project temp info
-	directory.
+When ``is_input_command_in_console`` is ``True``, ``interactive_mode``
+reads user input and translates console commands into actions.
+Supported commands include:
 
-This mode is useful when multiple client instances on the same host
-must coordinate ephemeral port usage for file-transfer sockets.
+- ``/quit``: send quit to the server and close the client.
+- ``/file <path>``: send a file to the server using client-side transfer.
+- ``/multiple_file <file1> <file2> ...``: send multiple files.
+- ``/file_folder <folder_path>``: send a folder recursively.
+- ``/multiple_file_folder <folder1> <folder2> ...``: send multiple folders.
+
+If a console command is registered via ``register_command(...,
+where_to_run='client')``, it is executed instead of the default send
+behavior.
+
+TCP Client file transfer API
+----------------------------
+
+The client supports both outgoing transfers to the server and incoming
+transfers initiated by the server.
+
+Client-to-server file transfer flow:
+
+1. The client sends a command such as ``/file <path>`` or
+   ``/file_folder <path>`` to the server.
+2. The server responds with ``/server_file_transfer_port <port>
+   <client_id>``.
+3. The client connects to the provided ephemeral transfer port and
+   begins the length-prefixed file metadata handshake.
+4. The client sends the filename and size, then streams the file data.
+
+.. code-block:: python
+
+    def file_transfer_mode(
+        self: Self,
+        filename: Any,
+        server_address: Any,
+        server_port: Any,
+        client_port: Any) -> bool: ...
+
+The client waits for the server start-sign message before sending file
+metadata. It sends:
+
+- 4 bytes: encoded filename length
+- filename bytes
+- 8 bytes: encoded file size
+- file payload in chunks
+
+It then waits for the server confirmation sign before reporting success.
+
+Server-to-client file receive flow:
+
+- ``file_transfer_client_recv_server_start`` allocates a local transfer
+  port and opens a temporary listening socket.
+- The client sends a ``/server_file_transfer_port`` reply to the server.
+- The remote server connects and the client receives file metadata and
+  data using ``file_transfer_mode_recv``.
+
+.. code-block:: python
+
+    def file_transfer_mode_recv(
+        self: Self,
+        server_file_address: Any,
+        server_file_port: Any,
+        client_socket: Any,
+        client_id: Any,
+        new_save_path: Any,
+        file_name: Any,
+        command: Any) -> None: ...
+
+The receive flow writes incoming files to ``received_files`` by default
+and supports optional folder-relative save paths or explicit names.
+
+Port allocation API
+-------------------
+
+The client can allocate ports manually when the server requests a client
+port range. This is controlled by ``/client_alloc_port_range`` and the
+following methods:
+
+- ``alloc_port`` / ``free_port``: top-level manual port allocation with
+  lock file coordination.
+- ``hand_alloc_port`` / ``hand_free_port``: persistent port allocation
+  state under ``.ServSpy/temp_info/clients_port_info.log``.
+
+Manual allocation uses ``client_port_lock.lock`` to serialize updates,
+so multiple client processes do not conflict when writing port state.
+
+Temporary server and client helpers
+-----------------------------------
+
+The client offers lightweight helpers for temporary connections:
+
+.. code-block:: python
+
+    def create_temporary_server(
+        self: Self,
+        handler: Any,
+        port: Any=None,
+        max_connections: int=1) -> Any: ...
+
+    def create_temporary_client(
+        self: Self,
+        server_host: Any,
+        server_port: Any,
+        bind_port: Any=None,
+        on_data: Any=None) -> Any: ...
+
+These helpers are useful for file-transfer coordination or short-lived
+peer interactions without interfering with the main client socket.
 
 Helper APIs
 -----------
 
-- ``broadcast``: Not applicable for a single client, but the client
-	exposes helpers to send messages to specific peers when acting as a
-	temporary server.
-- ``send_msg_to_specific_client``: used by the temporary-server helper
-	to forward or inject messages to the main client loop.
-- ``submit_task``: schedule work on the client's thread pool.
-
-Interactive console
--------------------
-
-When ``is_input_command_in_console`` is ``True``, the client spawns a
-console loop accepting administrative or chat commands. Typical
-commands are ``/help``, ``/quit``, and commands to start file
-transfers. Console-run handlers are registered through
-``register_command`` with ``where_to_run`` set to the console side.
+- ``submit_task``: submit a function to the client's custom thread pool.
+- ``_execute_custom_handler``: invoke registered handlers safely.
+- ``register_command``: add dynamic command handling for server or
+  console-side commands.
 
 Examples
 --------
@@ -197,35 +270,27 @@ Basic client usage:
 
 .. code-block:: python
 
-		client = TCP_Client_Base(host='127.0.0.1', port=65432)
-		client.connect()
-		# send a simple message
-		client.send_message(client.client_socket, 'hello server')
+    client = TCP_Client_Base(host='127.0.0.1', port=65432)
+    client.connect()
+    client.send_message(client.client_socket, 'hello server')
 
-Initiate a file send to server:
+Registering a server-side custom command:
 
 .. code-block:: python
 
-		client.send_message(client.client_socket, '/file /path/to/file 0')
+    def handle_ping(sock, addr, command):
+        return 'pong'
 
-This will trigger the server to return a transfer port and the
-client's file transfer routines will connect and stream the file.
+    client.register_command('/ping', handle_ping, 'server')
 
-Notes and extension points
---------------------------
+Sending a file from the client console:
 
-- The client supports registering custom command handlers via
-	``register_command``; these can be used to add application-specific
-	behavior without modifying the core library.
-- Long-running or blocking handlers should be registered with
-	``run_in_thread=True`` so the client's main receiver loop remains
-	responsive.
-- The file-transfer subsystem uses length-prefixed filename and size
-	handshakes and enforces a semaphore limit configured by
-	``max_file_transfer_thread_num`` to bound concurrent transfers.
+.. code-block:: python
+
+    /file /path/to/file
 
 See also
 --------
 
 For the server-side companion APIs and behavior, refer to
-[TCP_Server_APIs.rst](TCP_Server_APIs.rst).
+:doc:`TCP_Server_APIs`.

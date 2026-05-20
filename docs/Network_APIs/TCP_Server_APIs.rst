@@ -13,10 +13,16 @@ clients.
 
     class TCP_Server_Base:
         def __init__(
-            self: Self, host: Any, port: Any, max_clients: Any,
-            port_add_step: Any, port_range_num: Any,
-            max_file_transfer_thread_num: Any, is_hand_alloc_port: Any,
-            is_input_command_in_console: Any, max_custom_workers: Any) -> None: 
+            self: Self,
+            host: Any,
+            port: Any,
+            max_clients: Any,
+            port_add_step: Any,
+            port_range_num: Any,
+            max_file_transfer_thread_num: Any,
+            is_hand_alloc_port: Any,
+            is_input_command_in_console: Any,
+            max_custom_workers: Any) -> None: 
             ...
 
 The TCP Server Setup API is defined in the ``TCP_Server_Base`` class.
@@ -54,7 +60,8 @@ including the server socket or handle clients etc..*
 
 .. code-block:: python
 
-    def start_TCP_Server(self: Self) -> Any: ...
+    def start_TCP_Server(self: Self) -> Any:
+        ...
 
 In the `start_TCP_Server` method, we first create a 
 TCP server socket and bind it to the ``self.host`` and 
@@ -91,7 +98,8 @@ is defined as:
 .. code-block:: python
 
     def handle_client(
-        self: Self, client_socket: Any, client_address: Any) -> Any: ...
+        self: Self, client_socket: Any, client_address: Any) -> Any:
+        ...
 
 *Note: For more details of the `handle_client` function, please visit ...*
 
@@ -107,7 +115,8 @@ the function `stop`. And the stop function has been defined as:
 
 .. code-block:: python
 
-    def stop(self: Self) -> None: ...
+    def stop(self: Self) -> None:
+        ...
 
 For the stop tcp server function, it first set the ``self.running`` 
 variable to False, for stop the main loop of the server. 
@@ -117,7 +126,8 @@ defined as:
 
 .. code-block:: python
 
-    def free_port(self: Self) -> None: ...
+    def free_port(self: Self) -> None:
+        ...
 
 *Note: For more details of the `free_port` function, please visit ...*
 
@@ -152,7 +162,10 @@ and send messages.
 
 .. code-block:: python
 
-    def handle_client(self: Self, client_socket: Any, client_address: Any) -> None:
+    def handle_client(
+        self: Self,
+        client_socket: Any,
+        client_address: Any) -> None:
         ...
 
 `handle_client` is the main per-client handler in 
@@ -180,8 +193,10 @@ The `handle_command` function is defined as:
 .. code-block:: python
 
     def handle_command(
-        self: Self, client_socket: Any,
-        client_address: Any, command: Any) -> None:
+        self: Self,
+        client_socket: Any,
+        client_address: Any,
+        command: Any) -> None:
         ...
 
 In `handle_command`, there are variable conditional 
@@ -200,7 +215,10 @@ and the built-in commands, please visit ...*
 
 .. code-block:: python
 
-    def recieve_message(self: Self, client_socket: Any, msg_length: Int) -> Any:
+    def recieve_message(
+        self: Self,
+        client_socket: Any,
+        msg_length: Int) -> Any:
         ...
 
 `recieve_message` is a thin wrapper around socket 
@@ -212,7 +230,10 @@ caller.
 
 .. code-block:: python
 
-    def send_message(self: Self, client_socket: Any, message: Any) -> True|False:
+    def send_message(
+        self: Self,
+        client_socket: Any,
+        message: Any) -> True|False:
         ...
 
 `send_message` sends data back to a specific connected client.
@@ -275,8 +296,12 @@ defined as:
 .. code-block:: python
 
     def register_command(
-        self: Self, command_name: Any, handler: Any,
-        where_to_run: Any, run_in_thread: Any=False) -> bool: ...
+        self: Self,
+        command_name: Any,
+        handler: Any,
+        where_to_run: Any,
+        run_in_thread: Any=False) -> bool:
+        ...
 
 The args of the `register_command` function 
 are as follows:
@@ -346,8 +371,11 @@ is defined as:
 .. code-block:: python
 
     def _execute_custom_handler(
-        self:Self, handler:Any, command:Any,
-        client_socket:Any=None, client_address:Any=None) -> Any:
+        self:Self,
+        handler:Any,
+        command:Any,
+        client_socket:Any=None,
+        client_address:Any=None) -> Any:
         ...
 
 In this excecutor function, there is a try and except code 
@@ -368,7 +396,11 @@ the `submit_task` method, which is defined as:
 
 .. code-block:: python
 
-    def submit_task(self: Self, func: Any, *args: Any, **kwargs: Any) -> None:
+    def submit_task(
+        self: Self,
+        func: Any,
+        *args: Any,
+        **kwargs: Any) -> None:
         ...
 
 The `submit_task` method is a helper function that submits 
@@ -389,13 +421,18 @@ are defined as:
 .. code-block:: python
 
     def create_temporary_server(
-        self: Self, handler: Any, port: Any=None,
+        self: Self,
+        handler: Any,
+        port: Any=None,
         max_connections: Any=1) -> Any:
         ...
 
     def create_temporary_client(
-        self: Self, server_host: Any, server_port: Any,
-        bind_port: Any=None, on_data: Any=None) -> Any:
+        self: Self,
+        server_host: Any,
+        server_port: Any,
+        bind_port: Any=None,
+        on_data: Any=None) -> Any:
         ...
 
 TCP Server console commands
@@ -430,6 +467,13 @@ TCP Server file transfer API
 The TCP server contains a file transfer subsystem 
 that supports both client-to-server and server-to-client 
 transfers.
+
+It's too long to introduce all the file transfer functions, 
+so there are only the list of APIs for the file transfer 
+functions, and for more detatils of the file transfer 
+functions, please visit ...
+
+The file transfer API for you to use includes:
 
 Client-to-server transfer flow:
 
