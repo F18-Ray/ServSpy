@@ -475,6 +475,25 @@ functions, please visit ...
 
 The file transfer API for you to use includes:
 
+.. code-block:: python
+
+    def file_transfer_server_recv_client_start(
+        self: Self,
+        message: Any,
+        file_folder_abspath: Any) -> None|False:
+        ...
+
+    def file_transfer_server_recv_client_start_thread(
+        self: Self,
+        message: Any,
+        file_folder_abspath: Any=None) -> None:
+        ...
+
+    def folder_file_transfer_server_recv_client_start(
+        self: Self,
+        message: Any) -> None|False:
+        ...
+
 Client-to-server transfer flow:
 
 1. The client sends ``/file`` or ``/file_folder`` to request a transfer.
