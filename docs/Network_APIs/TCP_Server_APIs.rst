@@ -245,6 +245,39 @@ It verifies the server is running and the socket is valid, then:
 - sends the complete message with ``client_socket.sendall(data)``
 - returns ``True`` on success, otherwise logs the error and returns ``False``
 
+And there are also some other functions which are 
+used to send message in bulk to the clients, such 
+as the `broadcast` function and the `send_msg_to_specific_client` 
+function.
+
+.. code-block:: python
+
+    def broadcast(
+        self: Self,
+        message: Any,
+        exclude_client: Any=None) -> None:
+        ...
+
+In `broadcast` function, it will send a message to all 
+the clients which are in the ``self.clients`` variable, 
+also delete the clients which are already disconnected 
+with the server. And if the ``exclude_client`` parameter 
+is not ``None``, the server will exclude the client 
+which is specified by the ``exclude_client`` parameter 
+when sending the message.
+
+.. code-block:: python
+
+    def send_msg_to_specific_client(
+        self: Self,
+        message: Any) -> None:
+        ...
+
+The `send_msg_to_specific_client` function is used to send 
+one or more message to one or more specific clients by their 
+client IDs. And the ``message`` args should be input a send 
+message command.
+
 These methods form the server's client I/O loop 
 and ensure reliable message exchange for connected 
 TCP clients.
@@ -585,6 +618,12 @@ The server allocation APIs allow you to alloc a new
 port for another servers. There are two kinds of port 
 allocation modes.
 
+For change the port allocation mode, you can set the 
+args ``is_hand_alloc_port`` in the server instence class. 
+When input ``False``, the server instence will choose 
+the automaticlly port allocation mode, or input ``False`` 
+it will choose the manual allocation mode.
+
 We most recommand you that to use the automaticlly port 
 allocation mode, which is the default mode of the server, 
 because the automaticlly port allocation mode is more 
@@ -616,34 +655,82 @@ server class. The ``self.port_add_step`` is the args
 ``self.port_range_num`` is the args ``port_range_num`` 
 of the server class also.*
 
-When ``is_hand_alloc_port`` is ``True``, the server 
-uses manual port allocation and lock files to avoid 
-conflicts across multiple server instances. The relevant
-methods are:
+There are some relevant methods that can be used:
 
-- ``alloc_port``: allocate a port range for the server.
-- ``free_port``: release the allocated port range when the server stops.
-- ``hand_alloc_port`` and ``hand_free_port``: internal helpers used by the manual allocation flow.
+.. code-block:: python
 
-This mode is useful when the server must reserve a 
-controlled range of ports for client-file transfers 
-or when multiple server processes share the same host.
+    def palloc(self: Self) -> int:
+        ...
 
-TCP Server helper APIs
+The `palloc` method allow you to get a port, for 
+using this function, you don't need to worry about 
+the port allocation mode, because a allocation mode 
+detector is already be wrote in this method.
+
+.. code-block:: python
+
+    def pfree(
+        self: Self,
+        port: int) -> None|int:
+        ...
+
+The `pfree` method allow you to free a port, as the same 
+as `palloc` method, you don't need to care about the 
+port allocation mode when using this method.
+
+And there are the main functions for you to call, and 
+for more informations about the port allocation functions, 
+please visit ...
+
+This mode is useful when you need a indvidual port for 
+the server or  must reserve a controlled range of ports 
+for client-file transfers by manual port allocation, 
+such as in a testing environment or when multiple 
+server processes share the same host.
+
+TCP Server APIs table
 ----------------------
 
-The following helper methods are also available 
-on ``TCP_Server_Base``:
+In short, the table of contents of the public APIs 
+are following as:
 
-- ``broadcast(self, message, exclude_client=None)``: broadcast a message to all connected clients.
-- ``send_msg_to_specific_client(self, message)``: send a message to one or more specific clients by address.
-- ``submit_task(self, func, *args, **kwargs)``: submit work to the server's internal thread pool.
-- ``create_temporary_server(self, handler, port=None, max_connections=1)``: start a temporary TCP server for short-lived tasks.
-- ``create_temporary_client(self, server_host, server_port, bind_port=None, on_data=None)``: start a temporary client that receives data asynchronously.
+1. The server setup APIs:
+    - `TCP_Server_Base`
+    - `start_TCP_Server`
+    - `stop`
 
-These APIs make it easier to extend the base 
-TCP server for custom command handling, background 
-tasks, and temporary connections.
+2. The server handling information APIs:
+    - `handle_client`
+    - `handle_command`
+    - `recieve_message`
+    - `send_message`
+    - `broadcast`
+    - `send_msg_to_specific_client`
+
+3. The server command APIs:
+    - `register_command`
+    - `_execute_custom_handler`
+    - `submit_task`
+    - `create_temporary_server`
+    - `create_temporary_client`
+
+4. The server file transfer APIs:
+    - `file_transfer_server_recv_client_start`
+    - `file_transfer_server_recv_client_start_thread`
+    - `folder_file_transfer_server_recv_client_start`
+    - `multiple_file_multiple_client_transfer_server_recv_client_start`
+    - `diff_multiple_file_diff_multiple_client_transfer_server_recv_client_start`
+
+5. The server console commands:
+    - `/stop`
+    - `/status`
+    - `/clients`
+    - `/send_msg`
+    - `/file`
+    - `/file_folder`
+    - `/multiple_file_multiple_client`
+    - `/diff_multiple_file_diff_multiple_client`
+    - `/help`
 
 See Also
 --------
