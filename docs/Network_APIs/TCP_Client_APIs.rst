@@ -169,9 +169,12 @@ connection and is responsible for:
 In `handle_server_command`, the client processes built-in 
 commands sent by the server, such as:
 
-- ``/client_alloc_port_range``: configures the client’s manual port allocation range based on server broadcast.
-- ``/server_file_transfer_port``: receives the file transfer port assigned by the server for an ongoing file operation.
-- ``/file`` and ``/file_folder``: handle file transfer requests initiated by the server (server‑to‑client transfers).
+- ``/client_alloc_port_range``: configures the clients manual 
+  port allocation range based on server broadcast.
+- ``/server_file_transfer_port``: receives the file transfer 
+  port assigned by the server for an ongoing file operation.
+- ``/file`` and ``/file_folder``: handle file transfer requests 
+  initiated by the server (server-to-client transfers).
 
 If you have registered custom commands using the command 
 extension API, `handle_server_command` will also check 
@@ -223,28 +226,31 @@ TCP Client command API
 The client supports both built-in commands that the user can 
 type in the console, and a command extension API similar to 
 the server. The main entry point for incoming server commands 
-is `handle_server_command`, while user‑typed commands are 
+is `handle_server_command`, while user-typed commands are 
 processed in `interactive_mode`.
 
 The client supports two modes of operation: interactive console 
 input (when ``is_input_command_in_console`` is ``True``) or 
 programmatic control (when it is ``False``).
 
-Built-in client console commands (user‑typed) include:
+Built-in client console commands (user-typed) include:
 
 - ``/quit``: sends a quit message to the server and closes the connection.
 - ``/file <file_path>``: starts a file transfer from client to server.
-- ``/multiple_file <file1> <file2> ...``: sends multiple files from client to server (each in its own thread, respecting the semaphore limit).
-- ``/file_folder <folder_path>``: sends an entire folder from client to server, preserving the directory structure.
-- ``/multiple_file_folder <folder1> <folder2> ...``: sends multiple folders from client to server.
+- ``/multiple_file <file1> <file2> ...``: sends multiple files from 
+  client to server (each in its own thread, respecting the semaphore limit).
+- ``/file_folder <folder_path>``: sends an entire folder from 
+  client to server, preserving the directory structure.
+- ``/multiple_file_folder <folder1> <folder2> ...``: sends multiple 
+  folders from client to server.
 
-*Note: Unlike the server, the client does not have built‑in 
+*Note: Unlike the server, the client does not have built-in 
 ``/help``, ``/time``, or ``/clients`` commands because those 
-are typically handled by the server. The client’s ``/help`` 
+are typically handled by the server. The client's ``/help`` 
 command is not implemented; users should refer to the server 
 documentation for available commands.*
 
-If a user types a command that is not built‑in, the client 
+If a user types a command that is not built-in, the client 
 will check if it matches any registered custom commands 
 (see command extension API below). If it does, the client 
 will call the associated handler; otherwise the message 
@@ -265,10 +271,14 @@ The command extension API for the client is defined as:
 The arguments of the `register_command` function are the same 
 as on the server side:
 
-- ``command_name``: The name of the command to register (should start with a slash, e.g., ``/mycmd``).
-- ``handler``: The function to call when the command is received. The handler must accept three parameters: ``client_socket``, ``client_address``, and ``command``.
-- ``where_to_run``: Specifies where the command should be executed. Valid values are ``"server"`` (command sent from the server) or ``"client"`` (command typed in the client’s console).
-- ``run_in_thread``: A boolean indicating whether to run the handler in a separate thread from the thread pool.
+- ``command_name``: The name of the command to register 
+  (should start with a slash, e.g., ``/mycmd``).
+- ``handler``: The function to call when the command is received. 
+  The handler must accept three parameters: ``client_socket``, ``client_address``, and ``command``.
+- ``where_to_run``: Specifies where the command should be executed. 
+  Valid values are ``"server"`` (command sent from the server) or ``"client"`` (command typed in the client's console).
+- ``run_in_thread``: A boolean indicating whether to run the handler 
+  in a separate thread from the thread pool.
 
 *Note: The client stores registered commands in the same 
 structure as the server: ``self._custom_handlers = [{}, {}]``, 
@@ -290,7 +300,7 @@ handlers with error handling.
         ...
 
 The `submit_task` method works identically to the server 
-version: it submits a callable to the client’s thread pool, 
+version: it submits a callable to the client's thread pool, 
 using a semaphore to limit concurrency to ``max_custom_workers``.
 
 Temporary server and client creation
@@ -311,7 +321,7 @@ but use `self.client_host` as the local binding address.
 
 `create_temporary_server` binds to ``(self.client_host, port)``. 
 If ``port`` is ``None``, it calls ``self.palloc()`` to obtain 
-a port (in manual mode) or returns ``0`` (OS‑assigned). It 
+a port (in manual mode) or returns ``0`` (OS-assigned). It 
 returns a tuple ``(port, server_thread, stop_event)``.
 
 .. code-block:: python
@@ -342,7 +352,7 @@ When the client is started with ``is_input_command_in_console=True``
 (the default), the `interactive_mode` method is invoked. 
 This method reads lines from standard input and processes them.
 
-Supported console commands (user‑typed) include:
+Supported console commands (user-typed) include:
 
 - ``/quit``: closes the connection and exits the client.
 - ``/file <file_path>``: sends a single file to the server.
@@ -352,8 +362,8 @@ Supported console commands (user‑typed) include:
 - Any other text not starting with ``/`` is sent as a normal chat message to the server.
 
 .. note::
-   The client does not have a built‑in ``/help`` command. 
-   Please refer to the server’s help for available commands 
+   The client does not have a built-in ``/help`` command. 
+   Please refer to the server's help for available commands 
    (e.g., by typing ``/help`` after connecting to the server).
 
 If a user types a custom command that has been registered with 
@@ -380,7 +390,7 @@ TCP Client file transfer API
 ----------------------------
 
 The TCP client contains a file transfer subsystem that supports 
-both client‑to‑server and server‑to‑client transfers, using 
+both client-to-server and server-to-client transfers, using 
 the same underlying protocol as the server.
 
 As with the server documentation, only the list of APIs is 
@@ -389,7 +399,7 @@ the server documentation or the source code.
 
 The file transfer API for the client includes:
 
-The basic function for client‑to‑server file transfer is:
+The basic function for client-to-server file transfer is:
 
 .. code-block:: python
 
@@ -399,7 +409,7 @@ The basic function for client‑to‑server file transfer is:
         file_folder_abspath: Any=None) -> None|False:
         ...
 
-The thread‑safe version (recommended for direct calls) is:
+The thread-safe version (recommended for direct calls) is:
 
 .. code-block:: python
 
@@ -409,7 +419,7 @@ The thread‑safe version (recommended for direct calls) is:
         file_folder_abspath: Any=None) -> None:
         ...
 
-The folder transfer function (client‑to‑server) is:
+The folder transfer function (client-to-server) is:
 
 .. code-block:: python
 
@@ -418,7 +428,7 @@ The folder transfer function (client‑to‑server) is:
         message: Any) -> None|False:
         ...
 
-The multiple files transfer function (client‑to‑server) is:
+The multiple files transfer function (client-to-server) is:
 
 .. code-block:: python
 
@@ -436,7 +446,7 @@ The multiple folders transfer function is:
         message: Any) -> None:
         ...
 
-For server‑initiated transfers (server‑to‑client), the client 
+For server-initiated transfers (server-to-client), the client 
 provides these handlers:
 
 .. code-block:: python
@@ -464,7 +474,7 @@ provides these handlers:
         client_socket: Any) -> None:
         ...
 
-The low‑level receive mode function is:
+The low-level receive mode function is:
 
 .. code-block:: python
 
@@ -479,7 +489,7 @@ The low‑level receive mode function is:
         command: Any) -> None:
         ...
 
-And the low‑level send mode function is:
+And the low-level send mode function is:
 
 .. code-block:: python
 
@@ -491,7 +501,7 @@ And the low‑level send mode function is:
         client_port: Any) -> True|False:
         ...
 
-We recommend that for client‑initiated file transfers, 
+We recommend that for client-to-server file transfers, 
 you use the console commands (``/file``, ``/file_folder``, 
 etc.) rather than calling these APIs directly, because 
 the console commands already handle threading and semaphore 
@@ -515,14 +525,14 @@ either automatically (by returning 0, letting the OS choose)
 or manually within a configured range.
 
 To change the port allocation mode, the client listens to 
-the server’s broadcast of ``/client_alloc_port_range``. 
+the server's broadcast of ``/client_alloc_port_range``. 
 When the server sends that command with a number, the client 
 sets ``self.is_hand_alloc_port = True`` and configures the 
 range. If the server sends ``NO_LIMIT``, the client uses 
 automatic allocation (return 0 from allocation calls).
 
 In manual allocation mode, the port range is determined 
-by the server’s broadcast value. The client maintains its 
+by the server's broadcast value. The client maintains its 
 own range based on ``self.port`` (the server port) and 
 the received range. The minimum allocatable port is 
 ``self.port - self.port_add_step * each_client_port_range``, 
