@@ -15,3 +15,6 @@ documentation for details.
    :maxdepth: 2
    :caption: Contents:
 
+
+   Network_APIs/TCP_Server_APIs
+   Network_APIs/TCP_Client_APIs
