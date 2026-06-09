@@ -500,7 +500,7 @@ folder.
         file_folder_abspath: str = None
     ) -> None
 
-Thread‑safe version that starts a new thread for the transfer.
+Thread-safe version that starts a new thread for the transfer.
 
 .. code-block:: python
 
@@ -737,8 +737,8 @@ For more information about the TCP server and client base
 classes, please refer
 to:
 
-- :doc:`TCP_Server_APIs`
-- :doc:`TCP_Client_APIs`
+- :doc:`../Network_APIs/TCP_Server_APIs`
+- :doc:`../Network_APIs/TCP_Client_APIs`
 
 For details on port allocation, see the Port Allocation
 API sections in those
